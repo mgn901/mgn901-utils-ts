@@ -1,0 +1,24 @@
+{
+  "name": "@mgn901/mgn901-utils-ts",
+  "version": "0.0.0",
+  "description": "",
+  "main": "commomjs/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "version": "npm run build && git add -A commonjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgn901/mgn901-utils-ts.git"
+  },
+  "author": "mgn901 <mgn901+dev@gmail.com> (https://mgn901.pages.dev/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mgn901/mgn901-utils-ts/issues"
+  },
+  "homepage": "https://github.com/mgn901/mgn901-utils-ts#readme",
+  "devDependencies": {
+    "typescript": "^4.7.4"
+  }
+}
