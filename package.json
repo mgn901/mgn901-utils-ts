@@ -6,7 +6,7 @@
   "types": "commonjs/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "version": "npm run build && git add -A commonjs"
   },
   "repository": {
@@ -20,6 +20,9 @@
   },
   "homepage": "https://github.com/mgn901/mgn901-utils-ts#readme",
   "devDependencies": {
+    "@jest/globals": "^29.0.1",
+    "ts-jest": "^28.0.8",
+    "ts-node": "^10.9.1",
     "typescript": "^4.7.4"
   }
 }
