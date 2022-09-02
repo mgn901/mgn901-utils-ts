@@ -119,9 +119,15 @@ class KeyValueList<
 	 */
 	public pickAndInsert(pickFrom: TObject[FieldNameID], insertTo: TObject[FieldNameID], beforeOrAfter: 'before' | 'after'): void {
 		const pickFromIdx = this.getIndex(pickFrom);
-		const insertToIdx = this.getIndex(insertTo);
+		let insertToIdx = this.getIndex(insertTo);
 		if (pickFromIdx === -1 || insertToIdx === -1) {
 			throw new Error('Wrong id');
+		}
+		if (pickFromIdx === insertToIdx) {
+			return;
+		}
+		if (pickFromIdx < insertToIdx) {
+			insertToIdx = insertToIdx - 1;
 		}
 		const pickedItem = this._list[pickFromIdx];
 		this._list.splice(pickFromIdx, 1);
