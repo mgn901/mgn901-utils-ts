@@ -1,3 +1,31 @@
+const isBoolean = (v: unknown): v is boolean => {
+	return typeof v === 'boolean';
+}
+
+const isNumber = (v: unknown): v is number => {
+	return typeof v === 'number';
+}
+
+const isBigint = (v: unknown): v is bigint => {
+	return typeof v === 'bigint';
+}
+
+const isString = (v: unknown): v is string => {
+	return typeof v === 'string';
+}
+
+const isSymbol = (v: unknown): v is symbol => {
+	return typeof v === 'symbol';
+}
+
+const isObject = (v: unknown): v is object => {
+	return typeof v === 'object'
+}
+
+const isFunction = (v: unknown): v is ((...args: any[]) => any) => {
+	return typeof v === 'function';
+}
+
 /**
  * Test whether `v` is `Record`
  * @param v 
@@ -30,6 +58,13 @@ const isTypedArray = <T>(v: unknown, f: (w: unknown) => w is T): v is T[] => {
 }
 
 export {
+	isBoolean,
+	isNumber,
+	isBigint,
+	isString,
+	isSymbol,
+	isObject,
+	isFunction,
 	isRecord,
 	isTypedArray,
 };
