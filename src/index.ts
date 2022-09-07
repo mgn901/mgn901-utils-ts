@@ -20,6 +20,13 @@ export {
 } from './Nominal';
 
 export {
+	isBoolean,
+	isNumber,
+	isBigint,
+	isString,
+	isSymbol,
+	isObject,
+	isFunction,
 	isRecord,
 	isTypedArray,
 } from './utilsForTypeGuard';
