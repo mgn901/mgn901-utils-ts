@@ -1,34 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isTypedArray = exports.isRecord = exports.isFunction = exports.isObject = exports.isSymbol = exports.isString = exports.isBigint = exports.isNumber = exports.isBoolean = void 0;
-const isBoolean = (v) => {
-    return typeof v === 'boolean';
-};
-exports.isBoolean = isBoolean;
-const isNumber = (v) => {
-    return typeof v === 'number';
-};
-exports.isNumber = isNumber;
-const isBigint = (v) => {
-    return typeof v === 'bigint';
-};
-exports.isBigint = isBigint;
-const isString = (v) => {
-    return typeof v === 'string';
-};
-exports.isString = isString;
-const isSymbol = (v) => {
-    return typeof v === 'symbol';
-};
-exports.isSymbol = isSymbol;
-const isObject = (v) => {
-    return typeof v === 'object';
-};
-exports.isObject = isObject;
-const isFunction = (v) => {
-    return typeof v === 'function';
-};
-exports.isFunction = isFunction;
+exports.isTypedArray = exports.isRecord = void 0;
 /**
  * Test whether `v` is `Record`
  * @param v
