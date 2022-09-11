@@ -20,6 +20,10 @@ export {
 } from './Nominal';
 
 export {
+	PartiallyPartial
+} from './PartiallyPartial';
+
+export {
 	isBoolean,
 	isNumber,
 	isBigint,
