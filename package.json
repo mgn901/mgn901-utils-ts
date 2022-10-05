@@ -4,6 +4,7 @@
   "description": "",
   "main": "commonjs/index.js",
   "types": "commonjs/index.d.ts",
+  "files": ["commonjs", "README.md"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "jest",
