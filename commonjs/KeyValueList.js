@@ -62,6 +62,16 @@ class KeyValueList extends EventTarget {
         }
         return item;
     }
+    getNthItemAhead(id, n) {
+        const idx = this.getIndex(id);
+        if (idx === -1) {
+            throw new Error('Wrong id');
+        }
+        if (idx + n < 0 || idx + n > this.list.length - 1) {
+            throw new Error('Segmentation Fault');
+        }
+        return this._list[idx + n];
+    }
     /**
      * Whether item with specified id exists or not.
      * @param id

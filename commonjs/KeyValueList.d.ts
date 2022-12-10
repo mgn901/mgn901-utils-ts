@@ -28,6 +28,7 @@ declare class KeyValueList<TObject extends object, FieldNameID extends keyof TOb
      * @throws Throws `Wrong id` when specified wrong/unused id.
      */
     get(id: TObject[FieldNameID]): TObject;
+    getNthItemAhead(id: TObject[FieldNameID], n: number): TObject;
     /**
      * Whether item with specified id exists or not.
      * @param id
