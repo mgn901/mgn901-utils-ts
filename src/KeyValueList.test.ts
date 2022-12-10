@@ -30,6 +30,16 @@ describe('KeyValueList', () => {
 		}).toThrow('Wrong id');
 	});
 
+	test('getNthItemAhead', () => {
+		expect(() => {
+			keyValueList.getNthItemAhead('901', 1);
+		}).toThrow('Wrong id');
+		expect(keyValueList.getNthItemAhead('3', 1)).toEqual({ k: '4', v: 'bar' });
+		expect(() => {
+			keyValueList.getNthItemAhead('4', 1);
+		}).toThrow('Segmentation Fault');
+	});
+
 	test('has', () => {
 		expect(keyValueList.has('0')).toBe(true);
 		expect(keyValueList.has('901')).toBe(false);
