@@ -1,12 +1,9 @@
 {
   "name": "@mgn901/mgn901-utils-ts",
+  "type": "module",
   "version": "0.6.0",
   "description": "",
-  "files": [
-    "esmodules",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["esmodules", "README.md", "LICENSE"],
   "exports": {
     "./*": "./esmodules/*.js"
   },
@@ -21,7 +18,7 @@
     "type": "git",
     "url": "git+https://github.com/mgn901/mgn901-utils-ts.git"
   },
-  "author": "mgn901 <mgn901+dev@gmail.com> (https://mgn901.pages.dev/)",
+  "author": "mgn901 <mgn901+dev@gmail.com> (https://mgn901.com/)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/mgn901/mgn901-utils-ts/issues"
