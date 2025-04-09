@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { KeyValueList } from './KeyValueList';
+import { KeyValueList } from './key-value-list';
 
 describe('KeyValueList', () => {
   const keyValueList = new KeyValueList<{ k: string; v: string }, 'k'>('k');
