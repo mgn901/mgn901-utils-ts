@@ -132,3 +132,4 @@ dist
 # Added by mgn901
 .pnpm-store
 .DS_Store
+esmodules

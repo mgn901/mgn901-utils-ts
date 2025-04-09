@@ -1,4 +1,4 @@
-import { Nominal } from './Nominal';
+import type { Nominal } from './Nominal';
 
 /**
  * Nominal type for Unix Time
@@ -11,12 +11,11 @@ type UnixTime = Nominal<number, 'UnixTime'>;
  * @returns Is `v` `UnixTime`
  */
 const isUnixTime = (v: unknown): v is UnixTime => {
-	if (typeof v === 'number' && Number.isInteger(v)) {
-		return true;
-	} else {
-		return false;
-	}
-}
+  if (typeof v === 'number' && Number.isInteger(v)) {
+    return true;
+  }
+  return false;
+};
 
 /**
  * Nominal type for Unix Time in milliseconds
@@ -25,101 +24,99 @@ type UnixTimeMillis = Nominal<number, 'UnixTimeMillis'>;
 
 /**
  * Test whether `v` is `UnixTimeMillis`
- * @param v 
+ * @param v
  * @returns Is `v` `UnixTimeMillis`
  */
 const isUnixTimeMillis = (v: unknown): v is UnixTimeMillis => {
-	if (typeof v === 'number' && Number.isInteger(v)) {
-		return true;
-	} else {
-		return false;
-	}
-}
+  if (typeof v === 'number' && Number.isInteger(v)) {
+    return true;
+  }
+  return false;
+};
 
 /**
  * Convert `UnixTime` to `UnixTimeMillis`
- * @param unixTime 
+ * @param unixTime
  * @returns `unixTime` in `UnixTimeMillis`
  */
 const unixTimeToUnixTimeMillis = (unixTime: UnixTime): UnixTimeMillis => {
-	const millis = unixTime * 1000;
-	if (!isUnixTimeMillis(millis)) {
-		throw new Error('InvalidUnixTime');
-	} else {
-		return millis;
-	}
-}
+  const millis = unixTime * 1000;
+  if (!isUnixTimeMillis(millis)) {
+    throw new Error('InvalidUnixTime');
+  }
+  return millis;
+};
 
 /**
  * Convert `UnixTimeMillis` to `UnixTime`
- * @param unixTimeMillis 
+ * @param unixTimeMillis
  * @returns `unixTimeMillis` ins `UnixTime`
  */
 const unixTimeMillisToUnixTime = (unixTimeMillis: UnixTimeMillis): UnixTime => {
-	const s =  Math.floor(unixTimeMillis / 1000);
-	if (!isUnixTime(s)) {
-		throw new Error('InvalidUnixTimeMillis');
-	} else {
-		return s;
-	}
-}
+  const s = Math.floor(unixTimeMillis / 1000);
+  if (!isUnixTime(s)) {
+    throw new Error('InvalidUnixTimeMillis');
+  }
+  return s;
+};
 
 /**
  * Convert `UnixTimeMillis` to `Date`
- * @param unixTimeMillis 
+ * @param unixTimeMillis
  * @returns `unixTimeMillis` in `Date`
  */
 const unixTimeMillisToDate = (unixTimeMillis: UnixTimeMillis) => {
-	if (
-		unixTimeMillis > 100000000 * 24 * 60 * 60 * 1000
-		&& unixTimeMillis < 100000000 * 24 * 60 * 60 * 1000 * -1
-	) {
-		throw new Error('InvalidECMAScriptEpoch: Minimum value of ECMAScript epoch is -8,640,000,000,000,000 and maximum is 8,640,000,000,000,000');
-	}
-	return new Date(unixTimeMillis);
-}
+  if (
+    unixTimeMillis > 100000000 * 24 * 60 * 60 * 1000 &&
+    unixTimeMillis < 100000000 * 24 * 60 * 60 * 1000 * -1
+  ) {
+    throw new Error(
+      'InvalidECMAScriptEpoch: Minimum value of ECMAScript epoch is -8,640,000,000,000,000 and maximum is 8,640,000,000,000,000',
+    );
+  }
+  return new Date(unixTimeMillis);
+};
 
 /**
  * Convert `UnixTime` to `Date`
- * @param unixTime 
+ * @param unixTime
  * @returns `unixTime` in `Date`
  */
 const unixTimeToDate = (unixTime: UnixTime) => {
-	return new Date(unixTimeToUnixTimeMillis(unixTime));
-}
+  return new Date(unixTimeToUnixTimeMillis(unixTime));
+};
 
 /**
  * Convert `Date` to `UnixTimeMillis`
- * @param date 
+ * @param date
  * @returns `date` in `UnixTimeMillis`
  */
 const dateToUnixTimeMillis = (date: Date) => {
-	const millis = date.getTime();
-	if (!isUnixTimeMillis(millis)) {
-		throw new Error('InvalidDateError');
-	} else {
-		return millis;
-	}
-}
+  const millis = date.getTime();
+  if (!isUnixTimeMillis(millis)) {
+    throw new Error('InvalidDateError');
+  }
+  return millis;
+};
 
 /**
  * Convert `Date` to `UnixTime`
- * @param date 
+ * @param date
  * @returns `date` in `UnixTime`
  */
 const dateToUnixTime = (date: Date) => {
-	return unixTimeMillisToUnixTime(dateToUnixTimeMillis(date));
-}
+  return unixTimeMillisToUnixTime(dateToUnixTimeMillis(date));
+};
 
 export {
-	UnixTime,
-	isUnixTime,
-	UnixTimeMillis,
-	isUnixTimeMillis,
-	unixTimeToUnixTimeMillis,
-	unixTimeMillisToUnixTime,
-	unixTimeMillisToDate,
-	unixTimeToDate,
-	dateToUnixTimeMillis,
-	dateToUnixTime,
+  type UnixTime,
+  isUnixTime,
+  type UnixTimeMillis,
+  isUnixTimeMillis,
+  unixTimeToUnixTimeMillis,
+  unixTimeMillisToUnixTime,
+  unixTimeMillisToDate,
+  unixTimeToDate,
+  dateToUnixTimeMillis,
+  dateToUnixTime,
 };
