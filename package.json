@@ -4,14 +4,13 @@
   "description": "",
   "main": "commonjs/index.js",
   "types": "commonjs/index.d.ts",
-  "files": [
-    "commonjs",
-    "README.md"
-  ],
+  "files": ["commonjs", "README.md"],
   "scripts": {
+    "prepare": "husky",
+    "format": "biome check --write --config-path=./ .",
+    "lint": "tsc --noEmit && biome check --config-path=./ .",
     "build": "tsc -p tsconfig.json",
-    "test": "jest",
-    "version": "npm run build && git add -A commonjs"
+    "test": "jest --passWithNoTests"
   },
   "repository": {
     "type": "git",
@@ -24,9 +23,13 @@
   },
   "homepage": "https://github.com/mgn901/mgn901-utils-ts#readme",
   "devDependencies": {
-    "@jest/globals": "^29.0.1",
-    "ts-jest": "^28.0.8",
-    "ts-node": "^10.9.1",
-    "typescript": "^4.7.4"
+    "@biomejs/biome": "^1.9.4",
+    "@jest/globals": "^29.7.0",
+    "@swc/core": "^1.11.18",
+    "@swc/jest": "^0.2.37",
+    "husky": "^9.1.7",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.5.0",
+    "typescript": "^5.8.3"
   }
 }
