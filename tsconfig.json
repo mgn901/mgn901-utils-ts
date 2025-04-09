@@ -1,13 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "DOM",
-      "WebWorker"
-    ],
+    "lib": ["DOM", "WebWorker"],
     "jsx": "react-jsx",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "node10",
     "declaration": true,
     "outDir": "./esmodules",
     "esModuleInterop": true,
@@ -16,10 +13,5 @@
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true
   },
-  "include": [
-    "./src/**/*",
-    "./scripts/**/*",
-    "./*.config.js",
-    "./*.config.cjs"
-  ],
+  "include": ["./src/**/*", "./scripts/**/*", "./*.config.js", "./*.config.cjs"]
 }

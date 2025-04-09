@@ -1,9 +1,11 @@
-import type { Nominal } from './Nominal';
+import type { NominalPrimitive } from './nominal-primitive.type';
+
+const unixTimeTypeSymbol = Symbol('UnixTime');
 
 /**
  * Nominal type for Unix Time
  */
-type UnixTime = Nominal<number, 'UnixTime'>;
+type UnixTime = NominalPrimitive<number, typeof unixTimeTypeSymbol>;
 
 /**
  * Test whether `v` is `UnixTime`
@@ -17,10 +19,12 @@ const isUnixTime = (v: unknown): v is UnixTime => {
   return false;
 };
 
+export const unixTimeMillisTypeSymbol = Symbol('UnixTimeMillis');
+
 /**
  * Nominal type for Unix Time in milliseconds
  */
-type UnixTimeMillis = Nominal<number, 'UnixTimeMillis'>;
+type UnixTimeMillis = NominalPrimitive<number, typeof unixTimeMillisTypeSymbol>;
 
 /**
  * Test whether `v` is `UnixTimeMillis`

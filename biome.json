@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": [".devcontainer", ".husky", ".vscode", "commonjs", "esnext"]
+    "ignore": [".devcontainer", ".husky", ".vscode", "commonjs", "esmodules"]
   },
   "linter": {
     "enabled": true,
