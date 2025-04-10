@@ -1,9 +1,13 @@
 {
   "name": "@mgn901/mgn901-utils-ts",
   "type": "module",
-  "version": "0.7.0-alpha.1",
+  "version": "0.7.0-alpha.2",
   "description": "",
-  "files": ["esmodules", "README.md", "LICENSE"],
+  "files": [
+    "esmodules",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     "./*": "./esmodules/*.js"
   },
