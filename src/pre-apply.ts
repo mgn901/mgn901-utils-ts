@@ -24,7 +24,7 @@ export type PreApplied<
  *
  * @param func A function to be pre-applied.
  * @param preAppliedParams A parameter object pre-applied to the function.
- * @returns The function that pre-applied the preAppliedParams to the func.
+ * @returns The function that pre-applied the `preAppliedParams` to the `func`.
  */
 export const preApply =
   <P, R, TPreAppliedParams = Partial<P>>(
@@ -33,3 +33,39 @@ export const preApply =
   ): PreApplied<(this: unknown, params: P) => R, TPreAppliedParams> =>
   (params) =>
     func(mergeParams<P, TPreAppliedParams>({ params, preAppliedParams }));
+
+/**
+ * Returns the functions that 2nd parameter object is pre-applied to original functions.
+ *
+ * @param functions A dictionary of functions to be pre-applied.
+ * @param preAppliedParams A parameter object pre-applied to the functions.
+ * @returns The dictionary of functions that pre-applied the `preAppliedParams` to the each function in original `functions`.
+ */
+export const bulkPreApply = <
+  TPreApplied extends Record<string, (this: unknown, params: never) => unknown>,
+  TPreAppliedParams,
+>(
+  functions: {
+    readonly [K in keyof TPreApplied]: (
+      params: Parameters<TPreApplied[K]>[0] & TPreAppliedParams,
+    ) => ReturnType<TPreApplied[K]>;
+  },
+  preAppliedParams: TPreAppliedParams,
+): {
+  [K in keyof TPreApplied]: (
+    this: unknown,
+    params: Parameters<TPreApplied[K]>[0] & Partial<TPreAppliedParams>,
+  ) => ReturnType<TPreApplied[K]>;
+} =>
+  Object.fromEntries(
+    Object.entries(functions).map(([key, func]) => [
+      key,
+      (params: Parameters<TPreApplied[typeof key]>[0] & Partial<TPreAppliedParams>) =>
+        func(mergeParams({ params, preAppliedParams: preAppliedParams })),
+    ]),
+  ) as {
+    [K in keyof TPreApplied]: (
+      this: unknown,
+      params: Parameters<TPreApplied[K]>[0] & Partial<TPreAppliedParams>,
+    ) => ReturnType<TPreApplied[K]>;
+  };
