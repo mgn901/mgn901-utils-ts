@@ -48,6 +48,10 @@ export const ExecutionReducers = {
   >(
     self: S,
   ): S => ({ ...self, isExecuted: true }),
+
+  fromParams: <TId, TFunc extends (this: unknown, ...args: never[]) => TReturned, TReturned>(
+    params: Omit<Execution<TId, TFunc, TReturned>, typeof executionTypeSymbol>,
+  ) => ({ [executionTypeSymbol]: executionTypeSymbol, ...params }) as const,
 };
 
 export interface ExecutionRepository<
