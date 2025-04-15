@@ -1,7 +1,7 @@
 {
   "name": "@mgn901/mgn901-utils-ts",
   "type": "module",
-  "version": "0.7.0-alpha.5",
+  "version": "0.7.0-alpha.6",
   "description": "",
   "files": [
     "esmodules",
