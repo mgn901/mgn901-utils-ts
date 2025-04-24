@@ -1,11 +1,11 @@
-import type { Client, Server } from './asyncify-events';
-import type { Filters, FromRepository, OrderBy } from './repository-utils';
+import type { Client, Server } from './asyncify-events.js';
+import type { Filters, FromRepository, OrderBy } from './repository-utils.js';
 import {
   type TimeWindowRateLimitationRule,
   calculateNextExecutionDate,
-} from './time-window-rate-limitation';
-import { executeAt } from './timer';
-import type { TypedEventTarget } from './typed-event-target';
+} from './time-window-rate-limitation.js';
+import { executeAt } from './timer.js';
+import type { TypedEventTarget } from './typed-event-target.js';
 
 const executionTypeSymbol = Symbol('execution.type');
 

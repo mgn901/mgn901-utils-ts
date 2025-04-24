@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { range } from './range';
+import { range } from './range.js';
 
 describe('range', () => {
   test('returns an array of numbers from start to end (exclusive) with a given step', () => {
