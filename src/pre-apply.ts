@@ -54,7 +54,7 @@ export const bulkPreApply = <
 ): {
   [K in keyof TPreApplied]: (
     this: unknown,
-    params: Parameters<TPreApplied[K]>[0] & Partial<TPreAppliedParams>,
+    params: RequireLeft<Parameters<TPreApplied[K]>[0], Partial<TPreAppliedParams>>,
   ) => ReturnType<TPreApplied[K]>;
 } =>
   Object.fromEntries(
@@ -66,6 +66,6 @@ export const bulkPreApply = <
   ) as {
     [K in keyof TPreApplied]: (
       this: unknown,
-      params: Parameters<TPreApplied[K]>[0] & Partial<TPreAppliedParams>,
+      params: RequireLeft<Parameters<TPreApplied[K]>[0], TPreAppliedParams>,
     ) => ReturnType<TPreApplied[K]>;
   };
