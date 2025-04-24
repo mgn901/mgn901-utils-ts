@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { dedupe, except, intersect, union } from './set-operations';
+import { dedupe, except, intersect, union } from './set-operations.js';
 
 describe('set operations（集合演算）', () => {
   const a = [1, 2, 3, 4, 5, 8, 9, 11, 12, 14];

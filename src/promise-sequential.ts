@@ -1,4 +1,4 @@
-import { sleep } from './timer';
+import { sleep } from './timer.js';
 
 export const promiseSequential = async <T>(params: {
   readonly wrappedPromises: (() => Promise<T>)[];

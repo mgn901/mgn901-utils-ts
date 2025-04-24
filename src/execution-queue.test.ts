@@ -1,18 +1,18 @@
 import { beforeAll, describe, expect, jest, test } from '@jest/globals';
-import { Client, EventTargetTerminal, Server } from './asyncify-events';
+import { Client, EventTargetTerminal, Server } from './asyncify-events.js';
 import {
   type Execution,
   ExecutionQueueWithTimeWindowRateLimitation,
   ExecutionReducers,
   type ExecutionRepository,
-} from './execution-queue';
-import { type Id, generateId } from './random-values';
+} from './execution-queue.js';
+import { type Id, generateId } from './random-values.js';
 import {
   type Filters,
   type FromRepository,
   type OrderBy,
   repositorySymbol,
-} from './repository-utils';
+} from './repository-utils.js';
 
 class ExecutionRepositoryMock<
   TId,

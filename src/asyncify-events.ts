@@ -1,5 +1,5 @@
 import type { NominalPrimitive } from './nominal-primitive.type';
-import { type Id, generateId } from './random-values';
+import { type Id, generateId } from './random-values.js';
 
 const messageTypeSymbol = Symbol();
 
