@@ -3,12 +3,15 @@ import { type Id, generateId } from './random-values.js';
 
 const messageTypeSymbol = Symbol();
 
-interface Request<TFunc extends (this: unknown, ...args: never[]) => TReturned, TReturned> {
+interface Request<
+  TFunc extends (this: unknown, ...args: never[]) => TReturned,
+  TReturned = ReturnType<TFunc>,
+> {
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
   readonly args: Readonly<Parameters<TFunc>>;
 }
 
-interface Response<TFunc extends (this: unknown, ...args: never[]) => TReturned, TReturned> {
+interface Response<TReturned> {
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
   readonly returned: TReturned;
 }
@@ -61,7 +64,7 @@ export class Client<
       : (this: unknown, ...args: never[]) => TReturned
     : (this: unknown, ...args: never[]) => TReturned,
 > {
-  private readonly terminal: Terminal<Request<TFunc, TReturned>, Response<TFunc, TReturned>>;
+  private readonly terminal: Terminal<Request<TFunc, TReturned>, Response<TReturned>>;
   private readonly responseHandlers: Map<
     Request<TFunc, TReturned>['id'],
     (returned: TReturned) => void | Promise<void>
@@ -92,7 +95,7 @@ export class Client<
    */
   public constructor(params: {
     /** Specifies a {@linkcode Terminal} that will be used to communicate with the {@linkcode Server} on the other side. */
-    readonly terminal: Terminal<Request<TFunc, TReturned>, Response<TFunc, TReturned>>;
+    readonly terminal: Terminal<Request<TFunc, TReturned>, Response<TReturned>>;
   }) {
     this.terminal = params.terminal;
     this.responseHandlers = new Map();
@@ -147,7 +150,7 @@ export class Server<
   TFunc extends (this: unknown, ...args: never[]) => TReturned,
   TReturned = ReturnType<TFunc>,
 > {
-  private readonly terminal: Terminal<Response<TFunc, TReturned>, Request<TFunc, TReturned>>;
+  private readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TReturned>>;
 
   /**
    * Creates a new {@linkcode Server} instance.
@@ -155,7 +158,7 @@ export class Server<
    */
   public constructor(params: {
     /** Specifies a {@linkcode Terminal} that will be used to communicate with the {@linkcode Client} on the other side. */
-    readonly terminal: Terminal<Response<TFunc, TReturned>, Request<TFunc, TReturned>>;
+    readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TReturned>>;
     /** Specifies a function that will be called when a request is received. */
     readonly func: TFunc;
   }) {

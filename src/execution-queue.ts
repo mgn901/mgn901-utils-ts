@@ -125,7 +125,7 @@ export interface ExecutionQueue<
 > {
   enqueue(
     this: ExecutionQueue<TId, TFunc, TReturned>,
-    args: Readonly<Parameters<TFunc>>,
+    ...args: Readonly<Parameters<TFunc>>
   ): Promise<Execution<TId, TFunc, TReturned>>;
 
   cancel(this: ExecutionQueue<TId, TFunc, TReturned>, id: TId): Promise<void>;
@@ -152,7 +152,7 @@ export class ExecutionQueueWithTimeWindowRateLimitation<
 
   public async enqueue(
     this: ExecutionQueueWithTimeWindowRateLimitation<TId, TFunc, TReturned>,
-    args: Readonly<Parameters<TFunc>>,
+    ...args: Readonly<Parameters<TFunc>>
   ): Promise<Execution<TId, TFunc, TReturned>> {
     const executedAt = await calculateNextExecutionDate({
       timeWindowRateLimitationRules: this.timeWindowRateLimitationRulesSorted,

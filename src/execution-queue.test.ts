@@ -17,7 +17,7 @@ import {
 class ExecutionRepositoryMock<
   TId,
   TFunc extends (this: unknown, ...args: never[]) => TReturned,
-  TReturned,
+  TReturned = ReturnType<TFunc>,
 > implements ExecutionRepository<TId, TFunc, TReturned>
 {
   public readonly underlyingMap = new Map<TId, Execution<TId, TFunc, TReturned>>();
@@ -100,7 +100,7 @@ const expectedExecutionDateMap = new Map<number, Date>();
 const actualExecutionDateMap = new Map<number, Date>();
 const me = new EventTarget();
 const destination = new EventTarget();
-const server = new Server<(id: number) => void, void>({
+const server = new Server<(id: number) => void>({
   terminal: new EventTargetTerminal({ me: destination, destination: me }),
   func: (id: number) => {
     actualExecutionDateMap.set(id, new Date());
@@ -109,7 +109,7 @@ const server = new Server<(id: number) => void, void>({
 const client = new Client<typeof server>({
   terminal: new EventTargetTerminal({ me, destination }),
 });
-const executionRepository = new ExecutionRepositoryMock<Id, (id: number) => void, void>();
+const executionRepository = new ExecutionRepositoryMock<Id, (id: number) => void>();
 const timeWindowRateLimitationRules = [
   { timeWindowMs: 5000, executionCountPerTimeWindow: 10 },
   { timeWindowMs: 10000, executionCountPerTimeWindow: 15 },
@@ -133,7 +133,7 @@ jest.spyOn(global, 'setInterval');
 
 beforeAll(async () => {
   for (let i = 0; i < 100; i += 1) {
-    const { executedAt } = await executionQueue.enqueue([i]);
+    const { executedAt } = await executionQueue.enqueue(i);
     expectedExecutionDateMap.set(i, executedAt);
   }
 });
