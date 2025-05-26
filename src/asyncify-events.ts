@@ -4,11 +4,12 @@ import { type Id, generateId } from './random-values.js';
 const messageTypeSymbol = Symbol();
 
 interface Request<
-  TFunc extends (this: unknown, ...args: never[]) => TReturned,
+  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
+  TArgs extends unknown[] = Parameters<TFunc>,
   TReturned = ReturnType<TFunc>,
 > {
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
-  readonly args: Readonly<Parameters<TFunc>>;
+  readonly args: Readonly<TArgs>;
 }
 
 interface Response<TReturned> {
@@ -53,20 +54,24 @@ interface Response<TReturned> {
  * ```
  */
 export class Client<
-  TServer extends Server<TFunc, TReturned>,
-  TReturned = TServer extends Server<infer IFunc, infer IReturned> ? IReturned : unknown,
-  TFunc extends (this: unknown, ...args: never[]) => TReturned = TServer extends Server<
+  TServer extends Server<TFunc, TArgs, TReturned>,
+  TArgs extends unknown[] = TServer extends Server<infer IFunc, infer IArgs, infer IReturned>
+    ? IArgs
+    : unknown,
+  TReturned = TServer extends Server<infer IFunc, TArgs, infer IReturned> ? IReturned : unknown,
+  TFunc extends (this: unknown, ...args: TArgs) => TReturned = TServer extends Server<
     infer IFunc,
-    infer IReturned
+    TArgs,
+    TReturned
   >
-    ? IFunc extends (this: unknown, ...args: never[]) => TReturned
+    ? IFunc extends (this: unknown, ...args: TArgs) => TReturned
       ? IFunc
-      : (this: unknown, ...args: never[]) => TReturned
-    : (this: unknown, ...args: never[]) => TReturned,
+      : (this: unknown, ...args: TArgs) => TReturned
+    : (this: unknown, ...args: TArgs) => TReturned,
 > {
-  private readonly terminal: Terminal<Request<TFunc, TReturned>, Response<TReturned>>;
+  private readonly terminal: Terminal<Request<TFunc, TArgs, TReturned>, Response<TReturned>>;
   private readonly responseHandlers: Map<
-    Request<TFunc, TReturned>['id'],
+    Request<TFunc, TArgs, TReturned>['id'],
     (returned: TReturned) => void | Promise<void>
   >;
 
@@ -75,12 +80,12 @@ export class Client<
    * @param args The arguments to pass to the function.
    * @returns A promise that resolves to the returned value of the function.
    */
-  public async request<T extends Client<TServer, TReturned, TFunc>>(
+  public async request<T extends Client<TServer, TArgs, TReturned, TFunc>>(
     this: T,
-    ...args: Readonly<Parameters<TFunc>>
+    ...args: Readonly<TArgs>
   ): Promise<TReturned> {
-    const request: Request<TFunc, TReturned> = {
-      id: generateId() as Request<TFunc, TReturned>['id'],
+    const request: Request<TFunc, TArgs, TReturned> = {
+      id: generateId() as Request<TFunc, TArgs, TReturned>['id'],
       args,
     };
     this.terminal.post(request);
@@ -95,7 +100,7 @@ export class Client<
    */
   public constructor(params: {
     /** Specifies a {@linkcode Terminal} that will be used to communicate with the {@linkcode Server} on the other side. */
-    readonly terminal: Terminal<Request<TFunc, TReturned>, Response<TReturned>>;
+    readonly terminal: Terminal<Request<TFunc, TArgs, TReturned>, Response<TReturned>>;
   }) {
     this.terminal = params.terminal;
     this.responseHandlers = new Map();
@@ -147,10 +152,11 @@ export class Client<
  * ```
  */
 export class Server<
-  TFunc extends (this: unknown, ...args: never[]) => TReturned,
+  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
+  TArgs extends unknown[] = Parameters<TFunc>,
   TReturned = ReturnType<TFunc>,
 > {
-  private readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TReturned>>;
+  private readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TArgs, TReturned>>;
 
   /**
    * Creates a new {@linkcode Server} instance.
@@ -158,7 +164,7 @@ export class Server<
    */
   public constructor(params: {
     /** Specifies a {@linkcode Terminal} that will be used to communicate with the {@linkcode Client} on the other side. */
-    readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TReturned>>;
+    readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TArgs, TReturned>>;
     /** Specifies a function that will be called when a request is received. */
     readonly func: TFunc;
   }) {

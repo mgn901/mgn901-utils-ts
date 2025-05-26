@@ -2,29 +2,33 @@ import { beforeAll, describe, expect, jest, test } from '@jest/globals';
 import { Client, EventTargetTerminal, Server } from './asyncify-events.js';
 import {
   type Execution,
-  ExecutionQueueWithTimeWindowRateLimitation,
-  ExecutionReducers,
+  type ExecutionEvent,
+  type ExecutionId,
+  type ExecutionQueueState,
   type ExecutionRepository,
+  createExecutionQueueGateway,
+  createExecutionQueueTimeWindowRateLimitationStrategy,
 } from './execution-queue.js';
-import { type Id, generateId } from './random-values.js';
 import {
   type Filters,
   type FromRepository,
   type OrderBy,
   repositorySymbol,
 } from './repository-utils.js';
+import { createState } from './state.js';
+import type { TypedEventTarget } from './typed-event-target.js';
 
 class ExecutionRepositoryMock<
-  TId,
-  TFunc extends (this: unknown, ...args: never[]) => TReturned,
+  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
+  TArgs extends never[] = Parameters<TFunc>,
   TReturned = ReturnType<TFunc>,
-> implements ExecutionRepository<TId, TFunc, TReturned>
+> implements ExecutionRepository<TFunc, TArgs, TReturned>
 {
-  public readonly underlyingMap = new Map<TId, Execution<TId, TFunc, TReturned>>();
+  public readonly underlyingMap = new Map<ExecutionId, Execution<TFunc, TArgs, TReturned>>();
 
   public async getOneById(
-    id: TId,
-  ): Promise<FromRepository<Execution<TId, TFunc, TReturned>> | undefined> {
+    id: ExecutionId,
+  ): Promise<FromRepository<Execution<TFunc, TArgs, TReturned>> | undefined> {
     const latestVersion = this.underlyingMap.get(id);
     if (latestVersion === undefined) {
       return undefined;
@@ -33,11 +37,15 @@ class ExecutionRepositoryMock<
   }
 
   public async getMany(params: {
-    readonly filters?: Filters<Pick<Execution<TId, TFunc, TReturned>, 'executedAt' | 'isExecuted'>>;
-    readonly orderBy: OrderBy<Pick<Execution<TId, TFunc, TReturned>, 'executedAt' | 'isExecuted'>>;
+    readonly filters?: Filters<
+      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
+    >;
+    readonly orderBy: OrderBy<
+      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
+    >;
     readonly offset?: number | undefined;
     readonly limit?: number | undefined;
-  }): Promise<readonly FromRepository<Execution<TId, TFunc, TReturned>>[] | readonly []> {
+  }): Promise<readonly FromRepository<Execution<TFunc, TArgs, TReturned>>[] | readonly []> {
     return (await this.getExecutionsBase(params))
       .sort(
         (a, b) =>
@@ -52,14 +60,18 @@ class ExecutionRepositoryMock<
   }
 
   public async count(params: {
-    readonly filters?: Filters<Pick<Execution<TId, TFunc, TReturned>, 'executedAt' | 'isExecuted'>>;
+    readonly filters?: Filters<
+      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
+    >;
   }): Promise<number> {
     return (await this.getExecutionsBase(params)).length;
   }
 
   private async getExecutionsBase(params: {
-    readonly filters?: Filters<Pick<Execution<TId, TFunc, TReturned>, 'executedAt' | 'isExecuted'>>;
-  }): Promise<Execution<TId, TFunc, TReturned>[]> {
+    readonly filters?: Filters<
+      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
+    >;
+  }): Promise<Execution<TFunc, TArgs, TReturned>[]> {
     return [...this.underlyingMap.entries()]
       .filter(([_, execution]) => {
         const conditions = [
@@ -83,15 +95,15 @@ class ExecutionRepositoryMock<
       .map(([_, execution]) => execution);
   }
 
-  public async createOne(execution: Execution<TId, TFunc, TReturned>): Promise<void> {
+  public async createOne(execution: Execution<TFunc, TArgs, TReturned>): Promise<void> {
     this.underlyingMap.set(execution.id, execution);
   }
 
-  public async updateOne(execution: Execution<TId, TFunc, TReturned>): Promise<void> {
+  public async updateOne(execution: Execution<TFunc, TArgs, TReturned>): Promise<void> {
     this.underlyingMap.set(execution.id, execution);
   }
 
-  public async deleteOneById(id: TId): Promise<void> {
+  public async deleteOneById(id: ExecutionId): Promise<void> {
     this.underlyingMap.delete(id);
   }
 }
@@ -100,31 +112,34 @@ const expectedExecutionDateMap = new Map<number, Date>();
 const actualExecutionDateMap = new Map<number, Date>();
 const me = new EventTarget();
 const destination = new EventTarget();
-const server = new Server<(id: number) => void>({
+const server = new Server<(id: number) => Date>({
   terminal: new EventTargetTerminal({ me: destination, destination: me }),
   func: (id: number) => {
-    actualExecutionDateMap.set(id, new Date());
+    const actualExecutedDate = new Date();
+    actualExecutionDateMap.set(id, actualExecutedDate);
+    return actualExecutedDate;
   },
 });
 const client = new Client<typeof server>({
   terminal: new EventTargetTerminal({ me, destination }),
 });
-const executionRepository = new ExecutionRepositoryMock<Id, (id: number) => void>();
+const executionRepository = new ExecutionRepositoryMock<(id: number) => void>();
 const timeWindowRateLimitationRules = [
   { timeWindowMs: 5000, executionCountPerTimeWindow: 10 },
   { timeWindowMs: 10000, executionCountPerTimeWindow: 15 },
   { timeWindowMs: 20000, executionCountPerTimeWindow: 20 },
 ];
 
-const executionQueue = ExecutionQueueWithTimeWindowRateLimitation.create<
-  Id,
-  (id: number) => void,
-  void
->({
+const executionEventTarget: TypedEventTarget<ExecutionEvent<(id: number) => Date>> =
+  new EventTarget();
+
+const executionQueueGateway = createExecutionQueueGateway({
   client,
-  timeWindowRateLimitationRules,
-  executionFactory: ExecutionReducers.createFactory({ generateId }),
-  executionRepository: executionRepository,
+  executionQueueState: createState<ExecutionQueueState>({ status: 'idle' }),
+  executionEventTarget,
+  reservationEventTarget: new EventTarget(),
+  executionRepository,
+  strategy: createExecutionQueueTimeWindowRateLimitationStrategy({ timeWindowRateLimitationRules }),
 });
 
 jest.useFakeTimers();
@@ -132,8 +147,10 @@ jest.spyOn(global, 'setTimeout');
 jest.spyOn(global, 'setInterval');
 
 beforeAll(async () => {
+  executionQueueGateway.start({});
+
   for (let i = 0; i < 100; i += 1) {
-    const { executedAt } = await executionQueue.enqueue(i);
+    const { executedAt } = await executionQueueGateway.enqueue({ args: [i] });
     expectedExecutionDateMap.set(i, executedAt);
   }
 });
