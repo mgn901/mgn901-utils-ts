@@ -3,13 +3,14 @@ import type { NominalPrimitive } from './nominal-primitive.type.js';
 import { bulkPreApply } from './pre-apply.js';
 import { type Id, generateId } from './random-values.js';
 import type { Filters, FromRepository, OrderBy } from './repository-utils.js';
-import type { State } from './state.js';
+import { type State, createState } from './state.js';
 import {
   type TimeWindowRateLimitationRule,
   calculateNextExecutionDate,
 } from './time-window-rate-limitation.js';
 import { executeAt } from './timer.js';
 import type { TypedEventTarget } from './typed-event-target.js';
+import type { PartiallyPartial } from './utils.type.js';
 
 const executionTypeSymbol = Symbol('execution.type');
 
@@ -348,12 +349,19 @@ export const createExecutionQueueGateway = <
   TArgs extends unknown[] = Parameters<TFunc>,
   TReturned = ReturnType<TFunc>,
 >(
-  preAppliedParams: ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>,
+  preAppliedParams: PartiallyPartial<
+    ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>,
+    'client' | 'executionEventTarget' | 'executionRepository' | 'strategy'
+  >,
 ) =>
   bulkPreApply<
     ExecutionQueueGateway<TFunc, TArgs, TReturned>,
     ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>
-  >(ExecutionQueueGatewayImplementation, preAppliedParams);
+  >(ExecutionQueueGatewayImplementation, {
+    reservationEventTarget: new EventTarget(),
+    executionQueueState: createState<ExecutionQueueState>({ status: 'idle' }),
+    ...preAppliedParams,
+  });
 //#endregion
 
 /**

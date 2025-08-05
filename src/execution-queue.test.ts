@@ -135,9 +135,7 @@ const executionEventTarget: TypedEventTarget<ExecutionEvent<(id: number) => Date
 
 const executionQueueGateway = createExecutionQueueGateway({
   client,
-  executionQueueState: createState<ExecutionQueueState>({ status: 'idle' }),
   executionEventTarget,
-  reservationEventTarget: new EventTarget(),
   executionRepository,
   strategy: createExecutionQueueTimeWindowRateLimitationStrategy({ timeWindowRateLimitationRules }),
 });
