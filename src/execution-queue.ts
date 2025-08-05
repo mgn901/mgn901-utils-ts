@@ -252,7 +252,7 @@ export const ExecutionQueueGatewayImplementation = {
     TReturned = ReturnType<TFunc>,
   >(
     params: ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>,
-  ): void => {
+  ): { readonly stop: () => void } => {
     params.strategy.handleStart(params);
 
     const handleEnqueue = () => params.strategy.handleEnqueue(params);
@@ -261,6 +261,14 @@ export const ExecutionQueueGatewayImplementation = {
     params.reservationEventTarget.addEventListener('enqueue', handleEnqueue);
     params.reservationEventTarget.addEventListener('complete', handleComplete);
     params.reservationEventTarget.addEventListener('cancel', handleCancel);
+
+    return {
+      stop: () => {
+        params.reservationEventTarget.removeEventListener('enqueue', handleEnqueue);
+        params.reservationEventTarget.removeEventListener('complete', handleComplete);
+        params.reservationEventTarget.removeEventListener('cancel', handleCancel);
+      },
+    };
   },
 
   enqueue: async <

@@ -4,7 +4,6 @@ import {
   type Execution,
   type ExecutionEvent,
   type ExecutionId,
-  type ExecutionQueueState,
   type ExecutionRepository,
   createExecutionQueueGateway,
   createExecutionQueueTimeWindowRateLimitationStrategy,
@@ -15,7 +14,6 @@ import {
   type OrderBy,
   repositorySymbol,
 } from './repository-utils.js';
-import { createState } from './state.js';
 import type { TypedEventTarget } from './typed-event-target.js';
 
 class ExecutionRepositoryMock<
