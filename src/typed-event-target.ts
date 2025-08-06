@@ -1,7 +1,7 @@
 export class TypedEventTarget<TEvent extends Event> extends EventTarget {
   public addEventListener(
     this: TypedEventTarget<TEvent>,
-    type: string,
+    type: TEvent['type'],
     callback: TypedEventListener<TEvent> | TypedEventListenerObject<TEvent> | null,
     options?: AddEventListenerOptions | boolean,
   ) {
@@ -14,7 +14,7 @@ export class TypedEventTarget<TEvent extends Event> extends EventTarget {
 
   public removeEventListener(
     this: TypedEventTarget<TEvent>,
-    type: string,
+    type: TEvent['type'],
     callback: TypedEventListener<TEvent> | TypedEventListenerObject<TEvent> | null,
     options?: EventListenerOptions | boolean,
   ): void {
