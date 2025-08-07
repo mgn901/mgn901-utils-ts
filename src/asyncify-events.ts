@@ -3,11 +3,7 @@ import { type Id, generateId } from './random-values.js';
 
 const messageTypeSymbol = Symbol();
 
-interface Request<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> {
+interface Request<TArgs extends unknown[]> {
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
   readonly args: Readonly<TArgs>;
 }
@@ -17,251 +13,189 @@ interface Response<TReturned> {
   readonly returned: TReturned;
 }
 
+type AsyncifyEventsPort = {
+  send<TRequest>(this: unknown, request: TRequest): void;
+  listen<TResponse>(
+    this: unknown,
+    handleResponse: (this: unknown, response: TResponse) => void,
+  ): () => void;
+};
+
+export type Client<
+  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
+  TArgs extends unknown[] = Parameters<TFunc>,
+  TReturned = ReturnType<TFunc>,
+> = (...args: Readonly<TArgs>) => Promise<Awaited<TReturned>>;
+
 /**
- * A client that can be used to call functions on a {@linkcode Server}.
+ * Returns a {@linkcode Client} function that can be used to call functions on a server.
  *
  * ## Example (Web Worker as a Server)
  *
  * ### Web Worker side
  *
  * ```ts
+ * import { startServerFromPort, portFromMessagePort } from '@mgn901/mgn901-utils-ts/asyncify-events';
+ *
  * // define a function
  * export const add = (arg1: number, arg2: number) => arg1 + arg2;
  *
  * // setup a server
- * export const server = new Server({
- *   terminal: new MessagePortTerminal({ port: globalThis, channel: 'my-channel' }),
- *   func: add,
- * });
+ * startServerFromPort(add, portFromMessagePort(globalThis, 'my-channel'));
  * ```
  *
  * ### Window side
  *
  * ```ts
- * import { Client, MessagePortTerminal } from '@mgn901/mgn901-utils-ts/asyncify-events';
- * import type { server } from './worker.js';
- *
- * // setup a client
- * const worker = new Worker('worker.js');
- * const client = new Client<typeof server>({
- *   terminal: new MessagePortTerminal({ port: worker, channel: 'my-channel' }),
- * });
- *
- * // call a function on the server
- * client.request(1, 2).then((result) => {
- *   console.log(result); // => 3
- * });
- * ```
- */
-export class Client<
-  TServer extends Server<TFunc, TArgs, TReturned>,
-  TArgs extends unknown[] = TServer extends Server<infer IFunc, infer IArgs, infer IReturned>
-    ? IArgs
-    : unknown,
-  TReturned = TServer extends Server<infer IFunc, TArgs, infer IReturned> ? IReturned : unknown,
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned = TServer extends Server<
-    infer IFunc,
-    TArgs,
-    TReturned
-  >
-    ? IFunc extends (this: unknown, ...args: TArgs) => TReturned
-      ? IFunc
-      : (this: unknown, ...args: TArgs) => TReturned
-    : (this: unknown, ...args: TArgs) => TReturned,
-> {
-  private readonly terminal: Terminal<Request<TFunc, TArgs, TReturned>, Response<TReturned>>;
-  private readonly responseHandlers: Map<
-    Request<TFunc, TArgs, TReturned>['id'],
-    (returned: TReturned) => void | Promise<void>
-  >;
-
-  /**
-   * Calls a function on the server.
-   * @param args The arguments to pass to the function.
-   * @returns A promise that resolves to the returned value of the function.
-   */
-  public async request<T extends Client<TServer, TArgs, TReturned, TFunc>>(
-    this: T,
-    ...args: Readonly<TArgs>
-  ): Promise<TReturned> {
-    const request: Request<TFunc, TArgs, TReturned> = {
-      id: generateId() as Request<TFunc, TArgs, TReturned>['id'],
-      args,
-    };
-    this.terminal.post(request);
-    return new Promise<TReturned>((resolve, reject) => {
-      this.responseHandlers.set(request.id, resolve);
-    });
-  }
-
-  /**
-   * Creates a new {@linkcode Client} instance.
-   * @param params Configures the created client instance.
-   */
-  public constructor(params: {
-    /** Specifies a {@linkcode Terminal} that will be used to communicate with the {@linkcode Server} on the other side. */
-    readonly terminal: Terminal<Request<TFunc, TArgs, TReturned>, Response<TReturned>>;
-  }) {
-    this.terminal = params.terminal;
-    this.responseHandlers = new Map();
-
-    this.terminal.addListener((response) => {
-      const responseHandler = this.responseHandlers.get(response.id);
-      if (responseHandler !== undefined) {
-        responseHandler(response.returned);
-        this.responseHandlers.delete(response.id);
-      }
-    });
-  }
-}
-
-/**
- * A server that can be used to handle function calls from a {@linkcode Client}.
- *
- * ## Example (Web Worker as a Server)
- *
- * ### Web Worker side
- *
- * ```ts
- * // define a function
- * export const add = (arg1: number, arg2: number) => arg1 + arg2;
- *
- * // setup a server
- * const server = new Server({
- *   terminal: new MessagePortTerminal({ port: globalThis, channel: 'my-channel' }),
- *   func: add,
- * });
- * ```
- *
- * ### Window side
- *
- * ```ts
- * import { Client, MessagePortTerminal } from '@mgn901/mgn901-utils-ts/asyncify-events';
+ * import { clientFromPort, portFromMessagePort } from '@mgn901/mgn901-utils-ts/asyncify-events';
  * import type { add } from './worker.js';
  *
  * // setup a client
  * const worker = new Worker('worker.js');
- * const client = new Client<typeof add>({
- *   terminal: new MessagePortTerminal({ port: worker, channel: 'my-channel' }),
- * });
+ * const request = clientFromPort<typeof add>(
+ *   portFromMessagePort(worker, 'my-channel')
+ * );
  *
- * // call a function on the server
- * client.request(1, 2).then((result) => {
+ * // call a function on the worker
+ * request(1, 2).then((result) => {
  *   console.log(result); // => 3
  * });
  * ```
  */
-export class Server<
+export const clientFromPort = <
   TFunc extends (this: unknown, ...args: TArgs) => TReturned,
   TArgs extends unknown[] = Parameters<TFunc>,
   TReturned = ReturnType<TFunc>,
-> {
-  private readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TArgs, TReturned>>;
+>(
+  port: AsyncifyEventsPort,
+): Client<TFunc, TArgs, TReturned> => {
+  const pendingCallbacks = new Map<
+    Request<TArgs>['id'],
+    [resolve: (response: Awaited<TReturned>) => void, reject: (error: Error) => void]
+  >();
 
-  /**
-   * Creates a new {@linkcode Server} instance.
-   * @param params Configures the created server instance.
-   */
-  public constructor(params: {
-    /** Specifies a {@linkcode Terminal} that will be used to communicate with the {@linkcode Client} on the other side. */
-    readonly terminal: Terminal<Response<TReturned>, Request<TFunc, TArgs, TReturned>>;
-    /** Specifies a function that will be called when a request is received. */
-    readonly func: TFunc;
-  }) {
-    this.terminal = params.terminal;
+  let suspend: (() => void) | undefined;
 
-    this.terminal.addListener(async (request) => {
-      const returned = await params.func(...request.args);
-      this.terminal.post({ id: request.id, returned: returned });
+  const handleAllResponses = (response: Response<Awaited<TReturned>>): void => {
+    const item = pendingCallbacks.get(response.id);
+    pendingCallbacks.delete(response.id);
+    item?.[0](response.returned);
+    if (pendingCallbacks.size === 0) {
+      suspend?.();
+      suspend = undefined;
+    }
+  };
+
+  return (...args) => {
+    if (suspend === undefined) {
+      suspend = port.listen<Response<Awaited<TReturned>>>(handleAllResponses);
+    }
+
+    const request = { id: generateId() as Request<TArgs>['id'], args } satisfies Request<TArgs>;
+    const promise = new Promise<Awaited<TReturned>>((resolve, reject) => {
+      pendingCallbacks.set(request.id, [resolve, reject]);
+      port.send(request);
     });
-  }
-}
+
+    return promise;
+  };
+};
 
 /**
- * A terminal that can be used to communicate between a {@linkcode Client} and a {@linkcode Server}.
+ * Start a server that can be used to handle function calls from a {@linkcode Client}.
+ *
+ * ## Example (Web Worker as a Server)
+ *
+ * ### Web Worker side
+ *
+ * ```ts
+ * import { startServerFromPort, portFromMessagePort } from '@mgn901/mgn901-utils-ts/asyncify-events';
+ *
+ * // define a function
+ * export const add = (arg1: number, arg2: number) => arg1 + arg2;
+ *
+ * // setup a server
+ * startServerFromPort(add, portFromMessagePort(globalThis, 'my-channel'));
+ * ```
+ *
+ * ### Window side
+ *
+ * ```ts
+ * import { clientFromPort, portFromMessagePort } from '@mgn901/mgn901-utils-ts/asyncify-events';
+ * import type { add } from './worker.js';
+ *
+ * // setup a client
+ * const worker = new Worker('worker.js');
+ * const request = clientFromPort<typeof add>(
+ *   portFromMessagePort(worker, 'my-channel')
+ * );
+ *
+ * // call a function on the worker
+ * request(1, 2).then((result) => {
+ *   console.log(result); // => 3
+ * });
+ * ```
+ *
+ * @returns A function that can be called to stop the server.
  */
-export interface Terminal<TRequest, TResponse> {
-  /** @internal This is used by {@linkcode Client} instances to send messages. */
-  post(this: Terminal<TRequest, TResponse>, request: TRequest): void;
+export const startServerFromPort = <
+  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
+  TArgs extends unknown[] = Parameters<TFunc>,
+  TReturned = ReturnType<TFunc>,
+>(
+  func: TFunc,
+  port: AsyncifyEventsPort,
+): (() => void) =>
+  port.listen<Request<TArgs>>(async (request) => {
+    const returned = await func(...request.args);
+    port.send<Response<TReturned>>({ id: request.id, returned });
+  });
 
-  /** @internal This is used by {@linkcode Server} instances to receive messages. */
-  addListener(
-    this: Terminal<TRequest, TResponse>,
-    handleResponse: (this: unknown, response: TResponse) => void,
-  ): void;
-}
+export const portFromEventTarget = (me: EventTarget, other: EventTarget): AsyncifyEventsPort => ({
+  send: <TRequest>(request: TRequest) => {
+    other.dispatchEvent(new MessageEvent('message', { data: request }));
+  },
 
-/**
- * An implementation of {@linkcode Terminal} that uses the `EventTarget` interface to communicate.
- */
-export class EventTargetTerminal<TRequest, TResponse> implements Terminal<TRequest, TResponse> {
-  private readonly me: EventTarget;
-  private readonly destination: EventTarget;
-
-  public post(this: EventTargetTerminal<TRequest, TResponse>, request: TRequest): void {
-    this.destination.dispatchEvent(new MessageEvent('message', { data: request }));
-  }
-
-  public addListener(
-    this: EventTargetTerminal<TRequest, TResponse>,
-    handleResponse: (this: unknown, response: TResponse) => void,
-  ): void {
+  listen: <TResponse>(handleResponse: (this: unknown, response: TResponse) => void) => {
     const handleMessage = (event: Event | MessageEvent<TResponse>) => {
       if (event instanceof MessageEvent) {
         handleResponse(event.data as TResponse);
       }
     };
 
-    this.me.addEventListener('message', handleMessage);
-  }
+    me.addEventListener('message', handleMessage);
 
-  public constructor(params: { readonly me: EventTarget; readonly destination: EventTarget }) {
-    this.me = params.me;
-    this.destination = params.destination;
-  }
-}
+    return () => {
+      me.removeEventListener('message', handleMessage);
+    };
+  },
+});
 
-/**
- * An implementation of {@linkcode Terminal} that uses the `BroadcastChannel`-like interface to communicate.
- */
-export class MessagePortTerminal<TRequest, TResponse> implements Terminal<TRequest, TResponse> {
-  private readonly port:
+export const portFromMessagePort = (
+  messagePort:
     | BroadcastChannel
     | DedicatedWorkerGlobalScope
     | MessagePort
     | ServiceWorker
     | Window
-    | Worker;
-  private readonly channel: string;
+    | Worker,
+  channel: string,
+): AsyncifyEventsPort => ({
+  send: <TRequest>(request: TRequest) => {
+    messagePort.postMessage({ channel, body: request });
+  },
 
-  public post(this: MessagePortTerminal<TRequest, TResponse>, request: TRequest): void {
-    this.port.postMessage({ channel: this.channel, body: request });
-  }
-
-  public addListener(
-    this: MessagePortTerminal<TRequest, TResponse>,
-    handleResponse: (response: TResponse) => void,
-  ): void {
+  listen: <TResponse>(handleResponse: (this: unknown, response: TResponse) => void) => {
     const handleMessage = (event: Event | MessageEvent<TResponse>) => {
-      if (event instanceof MessageEvent && event.data.channel === this.channel) {
+      if (event instanceof MessageEvent && event.data.channel === channel) {
         handleResponse(event.data.body as TResponse);
       }
     };
 
-    this.port.addEventListener('message', handleMessage);
-  }
+    messagePort.addEventListener('message', handleMessage);
 
-  public constructor(params: {
-    readonly port:
-      | BroadcastChannel
-      | DedicatedWorkerGlobalScope
-      | MessagePort
-      | ServiceWorker
-      | Window
-      | Worker;
-    readonly channel: string;
-  }) {
-    this.port = params.port;
-    this.channel = params.channel;
-  }
-}
+    return () => {
+      messagePort.removeEventListener('message', handleMessage);
+    };
+  },
+});
