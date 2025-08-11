@@ -1,19 +1,44 @@
 import type { NominalPrimitive } from './nominal-primitive.type';
 import { type Id, generateId } from './random-values.js';
+import { defineRouter } from './router-utils.js';
 
 const messageTypeSymbol = Symbol();
 
-interface Request<TArgs extends unknown[]> {
+/** @internal */
+type Request<TArgs extends unknown[]> = {
+  readonly type: 'request';
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
   readonly args: Readonly<TArgs>;
-}
+};
 
-interface Response<TReturned> {
+/** @internal */
+type AbortRequest = {
+  readonly type: 'abortRequest';
+  readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
+  readonly reason: unknown;
+};
+
+/** @internal */
+type Response<TReturned> = {
+  readonly type: 'response';
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
   readonly returned: TReturned;
-}
+};
 
-type AsyncifyEventsPort = {
+/** @internal */
+type ErrorResponse = {
+  readonly type: 'errorResponse';
+  readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
+  readonly returned: unknown;
+};
+
+export type AbortableFunction<TArgs extends unknown[], TReturned> = (
+  this: unknown,
+  args: TArgs,
+  abortSignal?: AbortSignal,
+) => TReturned;
+
+export type AsyncifyEventsPort = {
   send<TRequest>(this: unknown, request: TRequest): void;
   listen<TResponse>(
     this: unknown,
@@ -26,6 +51,12 @@ export type Client<
   TArgs extends unknown[] = Parameters<TFunc>,
   TReturned = ReturnType<TFunc>,
 > = (...args: Readonly<TArgs>) => Promise<Awaited<TReturned>>;
+
+export type AbortableClient<
+  TFunc extends AbortableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = ReturnType<TFunc>,
+> = (args: Readonly<TArgs>, abortSignal?: AbortSignal) => Promise<Awaited<TReturned>>;
 
 /**
  * Returns a {@linkcode Client} function that can be used to call functions on a server.
@@ -69,35 +100,107 @@ export const clientFromPort = <
 >(
   port: AsyncifyEventsPort,
 ): Client<TFunc, TArgs, TReturned> => {
+  const underlyingAbortableClient = abortableClientFromPort<
+    AbortableFunction<TArgs, TReturned>,
+    TArgs,
+    TReturned
+  >(port);
+
+  // underlyingAbortableClientをAbortableClient未指定で呼び出す。
+  return (...args) => underlyingAbortableClient(args);
+};
+
+export const abortableClientFromPort = <
+  TFunc extends AbortableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = ReturnType<TFunc>,
+>(
+  port: AsyncifyEventsPort,
+): AbortableClient<TFunc, TArgs, TReturned> => {
   const pendingCallbacks = new Map<
     Request<TArgs>['id'],
-    [resolve: (response: Awaited<TReturned>) => void, reject: (error: Error) => void]
+    [resolve: (response: Awaited<TReturned>) => void, reject: (error: unknown) => void]
   >();
+  const requestIdAbortSignalMap = new Map<Request<TArgs>['id'], AbortSignal>();
+  const abortSignalRequestIdMap = new Map<AbortSignal, Request<TArgs>['id']>();
 
-  let suspend: (() => void) | undefined;
+  let unlisten: (() => void) | undefined;
 
-  const handleAllResponses = (response: Response<Awaited<TReturned>>): void => {
-    const item = pendingCallbacks.get(response.id);
+  // Client側のすべてのAbortSignalのabortイベントを処理する関数を定義する。
+  const handleAllAbortEvents = (event: Event): void => {
+    if (event.currentTarget instanceof AbortSignal === false) {
+      return;
+    }
+
+    // AbortSignalから元のリクエストのIDを取得する。
+    const id = abortSignalRequestIdMap.get(event.currentTarget);
+    if (id === undefined) {
+      return;
+    }
+
+    // ServerにAbortRequestを送信する。
+    port.send<AbortRequest>({ type: 'abortRequest', id, reason: event.currentTarget.reason });
+
+    // AbortSignalとリクエストIDの紐付けを解除する。
+    // AbortRequest送信後にServerがエラーを吐く可能性があるので、resolve/rejectとリクエストIDの紐付けの解除はしない。
+    requestIdAbortSignalMap.delete(id);
+    abortSignalRequestIdMap.delete(event.currentTarget);
+  };
+
+  // ServerからのすべてのResponseを処理する関数を定義する。
+  const handleAllResponses = (response: Response<Awaited<TReturned>> | ErrorResponse): void => {
+    // AbortSignalとリクエストIDの紐付けを解除する。
+    const abortSignal = requestIdAbortSignalMap.get(response.id);
+    if (abortSignal !== undefined) {
+      // リクエスト処理時に追加したAbortSignalのabortイベントリスナーも忘れずに削除する。
+      abortSignal.removeEventListener('abort', handleAllAbortEvents);
+      requestIdAbortSignalMap.delete(response.id);
+      abortSignalRequestIdMap.delete(abortSignal);
+    }
+
+    // resolve/rejectを呼び出す。
+    const callback = pendingCallbacks.get(response.id);
+    if (response.type === 'errorResponse') {
+      callback?.[1](response.returned);
+    } else {
+      callback?.[0](response.returned);
+    }
+
+    // resolve/rejectとリクエストIDの紐付けを解除する。
     pendingCallbacks.delete(response.id);
-    item?.[0](response.returned);
+
+    // Response待ちのリクエストが無くなった場合はlistenを解除する。
     if (pendingCallbacks.size === 0) {
-      suspend?.();
-      suspend = undefined;
+      unlisten?.();
+      unlisten = undefined;
     }
   };
 
-  return (...args) => {
-    if (suspend === undefined) {
-      suspend = port.listen<Response<Awaited<TReturned>>>(handleAllResponses);
+  // Clientの使用側からServerにリクエストを送信するための関数を定義する。
+  return (args, abortSignal) => {
+    // listenが解除済みの場合は再開する。
+    if (unlisten === undefined) {
+      unlisten = port.listen<Response<Awaited<TReturned>> | ErrorResponse>(handleAllResponses);
     }
 
-    const request = { id: generateId() as Request<TArgs>['id'], args } satisfies Request<TArgs>;
-    const promise = new Promise<Awaited<TReturned>>((resolve, reject) => {
-      pendingCallbacks.set(request.id, [resolve, reject]);
-      port.send(request);
-    });
+    const requestId = generateId() as Request<TArgs>['id'];
 
-    return promise;
+    // AbortSignalが指定されている場合は、abortイベントが来た際にその処理をするように設定する。
+    // AbortSignalとリクエストIDの紐付けもする。
+    if (abortSignal !== undefined) {
+      abortSignal.addEventListener('abort', handleAllAbortEvents, { once: true });
+      requestIdAbortSignalMap.set(requestId, abortSignal);
+      abortSignalRequestIdMap.set(abortSignal, requestId);
+    }
+
+    // Clientの使用側には、Serverの呼び出しをPromiseであるように見せる。
+    return new Promise<Awaited<TReturned>>((resolve, reject) => {
+      // Responseをresolve/rejectする処理は`handleAllResponses`に書いてある。
+      // `handleAllResponses`できるようにresolve/rejectとリクエストIDを紐付ける。
+      pendingCallbacks.set(requestId, [resolve, reject]);
+      // Serverにリクエストを送信する。
+      port.send<Request<TArgs>>({ type: 'request', id: requestId, args });
+    });
   };
 };
 
@@ -146,10 +249,48 @@ export const startServerFromPort = <
   func: TFunc,
   port: AsyncifyEventsPort,
 ): (() => void) =>
-  port.listen<Request<TArgs>>(async (request) => {
-    const returned = await func(...request.args);
-    port.send<Response<TReturned>>({ id: request.id, returned });
-  });
+  startAbortableServerFromPort<AbortableFunction<TArgs, TReturned>, TArgs, TReturned>(
+    (args: TArgs) => func(...args),
+    port,
+  );
+
+export const startAbortableServerFromPort = <
+  TFunc extends AbortableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = ReturnType<TFunc>,
+>(
+  func: TFunc,
+  port: AsyncifyEventsPort,
+): (() => void) => {
+  const abortControllers = new Map<Request<TArgs>['id'], AbortController>();
+
+  const handleRequest = async (request: Request<TArgs>) => {
+    const abortController = new AbortController();
+    abortControllers.set(request.id, abortController);
+    try {
+      const returned = await func(request.args, abortController.signal);
+      port.send<Response<TReturned>>({ type: 'response', id: request.id, returned });
+    } catch (error: unknown) {
+      port.send<ErrorResponse>({ type: 'errorResponse', id: request.id, returned: error });
+    } finally {
+      abortControllers.delete(request.id);
+    }
+  };
+
+  const handleAbortRequest = (request: AbortRequest) => {
+    const abortController = abortControllers.get(request.id);
+    if (abortController === undefined) {
+      return;
+    }
+    abortController.abort(request.reason);
+    abortControllers.delete(request.id);
+  };
+
+  const handlers = { request: handleRequest, abortRequest: handleAbortRequest };
+  const requestRouter = defineRouter(handlers, 'type');
+
+  return port.listen<Request<TArgs> | AbortRequest>(requestRouter);
+};
 
 export const portFromEventTarget = (me: EventTarget, other: EventTarget): AsyncifyEventsPort => ({
   send: <TRequest>(request: TRequest) => {
