@@ -241,25 +241,14 @@ export const abortableClientFromPort = <
  *
  * @returns A function that can be called to stop the server.
  */
-export const startServerFromPort = <
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
->(
-  func: TFunc,
+export const startServerFromPort = <TArgs extends unknown[], TReturned>(
+  func: (this: unknown, ...args: TArgs) => TReturned,
   port: AsyncifyEventsPort,
 ): (() => void) =>
-  startAbortableServerFromPort<AbortableFunction<TArgs, TReturned>, TArgs, TReturned>(
-    (args: TArgs) => func(...args),
-    port,
-  );
+  startAbortableServerFromPort<TArgs, TReturned>((args: TArgs) => func(...args), port);
 
-export const startAbortableServerFromPort = <
-  TFunc extends AbortableFunction<TArgs, TReturned>,
-  TArgs extends unknown[] = Parameters<TFunc>[0],
-  TReturned = ReturnType<TFunc>,
->(
-  func: TFunc,
+export const startAbortableServerFromPort = <TArgs extends unknown[], TReturned>(
+  func: AbortableFunction<TArgs, TReturned>,
   port: AsyncifyEventsPort,
 ): (() => void) => {
   const abortControllers = new Map<Request<TArgs>['id'], AbortController>();
@@ -292,22 +281,33 @@ export const startAbortableServerFromPort = <
   return port.listen<Request<TArgs> | AbortRequest>(requestRouter);
 };
 
-export const portFromEventTarget = (me: EventTarget, other: EventTarget): AsyncifyEventsPort => ({
+/** @internal */
+export type PortMessage<TBody> = { readonly channel: string; readonly body: TBody };
+
+export const portFromEventTarget = (params: {
+  readonly me: EventTarget;
+  readonly other: EventTarget;
+  readonly channel: string;
+}): AsyncifyEventsPort => ({
   send: <TRequest>(request: TRequest) => {
-    other.dispatchEvent(new MessageEvent('message', { data: request }));
+    const detail = { body: request, channel: params.channel } satisfies PortMessage<TRequest>;
+    params.other.dispatchEvent(new CustomEvent<PortMessage<TRequest>>('message', { detail }));
   },
 
   listen: <TResponse>(handleResponse: (this: unknown, response: TResponse) => void) => {
-    const handleMessage = (event: Event | MessageEvent<TResponse>) => {
-      if (event instanceof MessageEvent) {
-        handleResponse(event.data as TResponse);
+    const handleMessage = (event: Event | CustomEvent<PortMessage<TResponse>>) => {
+      if (
+        event instanceof CustomEvent &&
+        (event as CustomEvent<PortMessage<TResponse>>).detail.channel === params.channel
+      ) {
+        handleResponse((event as CustomEvent<PortMessage<TResponse>>).detail.body);
       }
     };
 
-    me.addEventListener('message', handleMessage);
+    params.me.addEventListener('message', handleMessage);
 
     return () => {
-      me.removeEventListener('message', handleMessage);
+      params.me.removeEventListener('message', handleMessage);
     };
   },
 });
@@ -323,13 +323,17 @@ export const portFromMessagePort = (
   channel: string,
 ): AsyncifyEventsPort => ({
   send: <TRequest>(request: TRequest) => {
-    messagePort.postMessage({ channel, body: request });
+    const data = { channel, body: request } satisfies PortMessage<TRequest>;
+    messagePort.postMessage(data);
   },
 
   listen: <TResponse>(handleResponse: (this: unknown, response: TResponse) => void) => {
-    const handleMessage = (event: Event | MessageEvent<TResponse>) => {
-      if (event instanceof MessageEvent && event.data.channel === channel) {
-        handleResponse(event.data.body as TResponse);
+    const handleMessage = (event: Event | MessageEvent<PortMessage<TResponse>>) => {
+      if (
+        event instanceof MessageEvent &&
+        (event as MessageEvent<PortMessage<TResponse>>).data.channel === channel
+      ) {
+        handleResponse((event as MessageEvent<PortMessage<TResponse>>).data.body);
       }
     };
 

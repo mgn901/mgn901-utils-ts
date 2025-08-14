@@ -81,8 +81,13 @@ describe('asyncify-events', () => {
   describe('Client: request and response handling', () => {
     const st = new EventTarget();
     const ct = new EventTarget();
-    const stopServer = startServerFromPort(addAsync, portFromEventTarget(st, ct));
-    const request = clientFromPort<typeof addAsync>(portFromEventTarget(ct, st));
+    const stopServer = startServerFromPort(
+      addAsync,
+      portFromEventTarget({ me: st, other: ct, channel: 'my-channel' }),
+    );
+    const request = clientFromPort<typeof addAsync>(
+      portFromEventTarget({ me: ct, other: st, channel: 'my-channel' }),
+    );
 
     test('client can send a request and receive a response', async () => {
       const resultPromise = request(1, 2);
@@ -117,8 +122,13 @@ describe('asyncify-events', () => {
   describe('AbortableClient: request and response handling', () => {
     const st = new EventTarget();
     const ct = new EventTarget();
-    const stopServer = startAbortableServerFromPort(abortableAddAsync, portFromEventTarget(st, ct));
-    const request = abortableClientFromPort<typeof abortableAddAsync>(portFromEventTarget(ct, st));
+    const stopServer = startAbortableServerFromPort(
+      abortableAddAsync,
+      portFromEventTarget({ me: st, other: ct, channel: 'my-channel' }),
+    );
+    const request = abortableClientFromPort<typeof abortableAddAsync>(
+      portFromEventTarget({ me: ct, other: st, channel: 'my-channel' }),
+    );
 
     test('client can send a request and receive a response', async () => {
       const resultPromise = request([1, 2]);
@@ -172,8 +182,13 @@ describe('asyncify-events', () => {
   describe('Client: request and error handling', () => {
     const st = new EventTarget();
     const ct = new EventTarget();
-    const stopServer = startServerFromPort(rejectAsync, portFromEventTarget(st, ct));
-    const request = clientFromPort<typeof rejectAsync>(portFromEventTarget(ct, st));
+    const stopServer = startServerFromPort(
+      rejectAsync,
+      portFromEventTarget({ me: st, other: ct, channel: 'my-channel' }),
+    );
+    const request = clientFromPort<typeof rejectAsync>(
+      portFromEventTarget({ me: ct, other: st, channel: 'my-channel' }),
+    );
 
     test('client can handle a request and receive an error', async () => {
       expect(request()).rejects.toThrowError('Error');
@@ -189,10 +204,10 @@ describe('asyncify-events', () => {
     const ct = new EventTarget();
     const stopServer = startAbortableServerFromPort(
       abortableRejectAsync,
-      portFromEventTarget(st, ct),
+      portFromEventTarget({ me: st, other: ct, channel: 'my-channel' }),
     );
     const request = abortableClientFromPort<typeof abortableRejectAsync>(
-      portFromEventTarget(ct, st),
+      portFromEventTarget({ me: ct, other: st, channel: 'my-channel' }),
     );
 
     test('client can handle a request and receive an error', async () => {
@@ -207,8 +222,11 @@ describe('asyncify-events', () => {
   describe('AbortableClient: lifecycle management', () => {
     const st = new EventTarget();
     const ct = new EventTarget();
-    const clientPort = portFromEventTarget(ct, st);
-    const stopServer = startAbortableServerFromPort(add, portFromEventTarget(st, ct));
+    const clientPort = portFromEventTarget({ me: ct, other: st, channel: 'my-channel' });
+    const stopServer = startAbortableServerFromPort(
+      add,
+      portFromEventTarget({ me: st, other: ct, channel: 'my-channel' }),
+    );
     const request = abortableClientFromPort<typeof add>(clientPort);
 
     test('response handler is stopped if unnecessary', async () => {
