@@ -1,585 +1,312 @@
-import type { Client, Server } from './asyncify-events.js';
+import {
+  dispatchFunctionFromEventTarget,
+  subscribeHandlersToEventTarget,
+} from './custom-event-utils.js';
 import type { NominalPrimitive } from './nominal-primitive.type.js';
-import { bulkPreApply } from './pre-apply.js';
 import { type Id, generateId } from './random-values.js';
 import type { Filters, FromRepository, OrderBy } from './repository-utils.js';
-import { type State, createState } from './state.js';
+import { createState } from './state.js';
 import {
   type TimeWindowRateLimitationRule,
   calculateNextExecutionDate,
 } from './time-window-rate-limitation.js';
-import { executeAt } from './timer.js';
-import type { TypedEventTarget } from './typed-event-target.js';
-import type { PartiallyPartial } from './utils.type.js';
+import type { SchedulableFunction } from './timer.js';
 
-const executionTypeSymbol = Symbol('execution.type');
-
-/**
- * Represents a unique identifier for an {@link Execution} entry in the queue.
- */
+//#region interfaces
+const executionTypeSymbol = Symbol('executionType');
 export type ExecutionId = NominalPrimitive<Id, typeof executionTypeSymbol>;
-
-/**
- * Represents a single execution entry in the queue.
- * Contains execution id, arguments, scheduled execution date, and execution status.
- */
-export type Execution<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> = {
-  readonly [executionTypeSymbol]: typeof executionTypeSymbol;
+export type Execution<TArgs extends unknown[]> = {
   readonly id: ExecutionId;
-  readonly args: Readonly<TArgs>;
+  readonly args: TArgs;
   readonly executedAt: Date;
-  readonly isExecuted: boolean;
+  readonly status: 'pending' | 'canceled' | 'running' | 'completed' | 'failed';
 };
 
-/**
- * Utility functions for creating and updating {@link Execution} objects.
- */
-export const ExecutionReducers = {
-  create: <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: Pick<Execution<TFunc, TArgs, TReturned>, 'args' | 'executedAt'>,
-  ): Execution<TFunc, TArgs, TReturned> => {
-    return {
-      [executionTypeSymbol]: executionTypeSymbol,
-      id: generateId() as ExecutionId,
-      args: params.args,
-      executedAt: params.executedAt,
-      isExecuted: false,
-    };
-  },
+export type Enqueue<TArgs extends unknown[]> = (
+  ...args: TArgs
+) => Promise<{ readonly executionId: ExecutionId; readonly executedAt: Date }>;
+export type Cancel = (executionId: ExecutionId, reason?: unknown) => Promise<void>;
 
-  toExecuted: <
-    S extends Execution<TFunc, TArgs, TReturned>,
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    self: S,
-  ): S => ({ ...self, isExecuted: true }),
+export type CalculateExecutionDate = (
+  this: unknown,
+  repository: Pick<
+    ExecutionRepository<SchedulableFunction<unknown[], unknown>>,
+    'getOneById' | 'getMany' | 'count'
+  >,
+) => Promise<Date>;
 
-  toExecutionDateUpdated: <
-    S extends Execution<TFunc, TArgs, TReturned>,
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    self: S,
-    params: { readonly newExecutedAt: Date },
-  ): S => ({ ...self, executedAt: params.newExecutedAt }),
-
-  fromParams: <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: Omit<Execution<TFunc, TArgs, TReturned>, typeof executionTypeSymbol>,
-  ) => ({ [executionTypeSymbol]: executionTypeSymbol, ...params }) as const,
-};
-
-/**
- * Represents events that occur in the execution queue, such as schedule changes or completion.
- */
-export type ExecutionEvent<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
+export type ExecutionQueueEventData<
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
 > =
-  | ExecutionScheduleChangeEvent<TFunc, TArgs, TReturned>
-  | ExecutionCompleteEvent<TFunc, TArgs, TReturned>;
+  | ExecutionQueueScheduleUpdatedEventData<TFunc, TArgs, TReturned>
+  | ExecutionQueueStartedEventData<TFunc, TArgs, TReturned>
+  | ExecutionQueueCompletedEventData<TFunc, TArgs, TReturned>
+  | ExecutionQueueFailedEventData<TFunc, TArgs, TReturned>
+  | ExecutionQueueErrorEventData;
+export type ExecutionQueueScheduleUpdatedEventData<
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
+> = {
+  readonly type: 'scheduleUpdated';
+  readonly executionId: ExecutionId;
+  readonly args: TArgs;
+  readonly previousExecutedAt: Date;
+  readonly newExecutedAt: Date;
+};
+export type ExecutionQueueStartedEventData<
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
+> = {
+  readonly type: 'started';
+  readonly executionId: ExecutionId;
+  readonly args: TArgs;
+};
+export type ExecutionQueueCompletedEventData<
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
+> = {
+  readonly type: 'completed';
+  readonly executionId: ExecutionId;
+  readonly args: TArgs;
+  readonly value: TReturned;
+};
+export type ExecutionQueueFailedEventData<
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
+> = {
+  readonly type: 'failed';
+  readonly executionId: ExecutionId;
+  readonly args: TArgs;
+  readonly value: unknown;
+};
+export type ExecutionQueueErrorEventData = { readonly type: 'error'; readonly error: unknown };
 
-/**
- * Event fired when the execution schedule is changed.
- */
-export class ExecutionScheduleChangeEvent<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> extends Event {
-  public readonly type: 'scheduleChange';
-  public readonly id: ExecutionId;
-  public readonly args: Readonly<TArgs>;
-  public readonly newSchedule: Date;
+export type ExecutionRepository<
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
+> = {
+  getOneById(this: unknown, id: ExecutionId): Promise<FromRepository<Execution<TArgs>> | undefined>;
+  getMany(
+    this: unknown,
+    params: {
+      readonly filters?: Filters<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
+      readonly orderBy: OrderBy<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
+      readonly offset?: number | undefined;
+      readonly limit?: number | undefined;
+    },
+  ): Promise<readonly FromRepository<Execution<TArgs>>[] | readonly []>;
+  count(
+    this: unknown,
+    params: { readonly filters?: Filters<Pick<Execution<TArgs>, 'executedAt' | 'status'>> },
+  ): Promise<number>;
+  createOne(this: unknown, execution: Execution<TArgs>): Promise<void>;
+  updateOne(this: unknown, execution: FromRepository<Execution<TArgs>>): Promise<void>;
+  deleteOneById(this: unknown, executionId: ExecutionId): Promise<void>;
+};
+//#endregion
 
-  public constructor(
-    params: Pick<
-      ExecutionScheduleChangeEvent<TFunc, TArgs, TReturned>,
-      'id' | 'args' | 'newSchedule'
-    >,
-  ) {
-    super('scheduleChange');
-    this.type = 'scheduleChange';
-    this.id = params.id;
-    this.args = params.args;
-    this.newSchedule = params.newSchedule;
-  }
-}
-
-/**
- * Event fired when an execution is completed.
- */
-export class ExecutionCompleteEvent<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> extends Event {
-  public readonly type: 'complete';
-  public readonly id: ExecutionId;
-  public readonly args: Readonly<TArgs>;
-  public readonly returned: TReturned;
-
-  public constructor(
-    params: Pick<ExecutionCompleteEvent<TFunc, TArgs, TReturned>, 'id' | 'args' | 'returned'>,
-  ) {
-    super('complete');
-    this.type = 'complete';
-    this.id = params.id;
-    this.args = params.args;
-    this.returned = params.returned;
-  }
-}
-
-/**
- * Represents the state of the execution queue (idle or reserved).
- */
-export type ExecutionQueueState =
+type StateValue<TArgs extends unknown[]> =
   | {
-      readonly status: 'reserved';
-      readonly id: ExecutionId;
+      readonly status: 'running';
+      readonly execution: FromRepository<Execution<TArgs>>;
       readonly abortController: AbortController;
     }
   | { readonly status: 'idle' };
 
-/**
- * Public interface for the execution queue gateway.
- * Provides methods to enqueue, cancel, and start the queue.
- */
-export type ExecutionQueueGateway<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> = {
-  enqueue(
-    this: unknown,
-    params: { readonly args: Readonly<TArgs> },
-  ): Promise<Execution<TFunc, TArgs, TReturned>>;
-
-  cancel(this: unknown, params: { readonly id: ExecutionId }): Promise<void>;
-
-  start(params: Record<never, never> & {}): void;
+type ControlEventData<TArgs extends unknown[]> =
+  | ControlPopEventData
+  | ControlRunEventData<TArgs>
+  | ControlSuspendEventData;
+type ControlPopEventData = { readonly type: 'pop' };
+type ControlRunEventData<TArgs extends unknown[]> = {
+  readonly type: 'run';
+  readonly execution: FromRepository<Execution<TArgs>>;
+  readonly abortController: AbortController;
 };
+type ControlSuspendEventData = { readonly type: 'suspend' };
 
-/**
- * Repository interface for persisting and retrieving execution entries.
- */
-export type ExecutionRepository<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> = {
-  getOneById(
-    this: ExecutionRepository<TFunc, TArgs, TReturned>,
-    id: ExecutionId,
-  ): Promise<FromRepository<Execution<TFunc, TArgs, TReturned>> | undefined>;
-
-  getMany(
-    this: ExecutionRepository<TFunc, TArgs, TReturned>,
-    params: {
-      readonly filters?: Filters<
-        Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'> // `id`の型が不定なので取り除いている。以下同様。
-      >;
-      readonly orderBy: OrderBy<
-        Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
-      >;
-      readonly offset?: number | undefined;
-      readonly limit?: number | undefined;
-    },
-  ): Promise<readonly FromRepository<Execution<TFunc, TArgs, TReturned>>[] | readonly []>;
-
-  count(
-    this: ExecutionRepository<TFunc, TArgs, TReturned>,
-    params: {
-      readonly filters?: Filters<
-        Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
-      >;
-    },
-  ): Promise<number>;
-
-  createOne(
-    this: ExecutionRepository<TFunc, TArgs, TReturned>,
-    execution: Execution<TFunc, TArgs, TReturned>,
-  ): Promise<void>;
-
-  updateOne(
-    this: ExecutionRepository<TFunc, TArgs, TReturned>,
-    execution: FromRepository<Execution<TFunc, TArgs, TReturned>>,
-  ): Promise<void>;
-
-  deleteOneById(this: ExecutionRepository<TFunc, TArgs, TReturned>, id: ExecutionId): Promise<void>;
-};
-
-//#region ExecutionQueueGateway
-/**
- * Dependencies required for the execution queue gateway implementation.
- */
-export type ExecutionQueueGatewayDependencies<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> = {
-  readonly strategy: ExecutionQueueStrategy<TFunc, TArgs, TReturned>;
-  readonly executionQueueState: State<ExecutionQueueState>;
+export const executionQueue = async <
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends unknown[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
+>(params: {
+  readonly schedulableFunction: TFunc;
+  readonly calculateExecutionDate: CalculateExecutionDate;
+  readonly executionQueueEventTarget: EventTarget;
   readonly executionRepository: ExecutionRepository<TFunc, TArgs, TReturned>;
-  readonly client: Client<Server<TFunc, TArgs, TReturned>, TArgs, TReturned, TFunc>;
-  readonly executionEventTarget: TypedEventTarget<ExecutionEvent<TFunc, TArgs, TReturned>>;
-  readonly reservationEventTarget: EventTarget;
-};
+}): Promise<{ readonly enqueue: Enqueue<TArgs>; readonly cancel: Cancel }> => {
+  const queueState = createState<StateValue<TArgs>>({ status: 'idle' });
+  const controlEventTarget = new EventTarget();
+  let unsubscribeControlEventHandlers: (() => void) | undefined;
 
-/**
- * Main implementation of the {@linkcode ExecutionQueueGateway}.
- * Delegates operations to the provided strategy and dependencies.
- */
-export const ExecutionQueueGatewayImplementation = {
-  start: <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>,
-  ): { readonly stop: () => void } => {
-    params.strategy.handleStart(params);
+  const dispatchExecutionQueueEvent = dispatchFunctionFromEventTarget<
+    ExecutionQueueEventData<TFunc, TArgs, TReturned>
+  >(params.executionQueueEventTarget);
+  const dispatchControlEvent =
+    dispatchFunctionFromEventTarget<ControlEventData<TArgs>>(controlEventTarget);
 
-    const handleEnqueue = () => params.strategy.handleEnqueue(params);
-    const handleComplete = () => params.strategy.handleComplete(params);
-    const handleCancel = () => params.strategy.handleCancel(params);
-    params.reservationEventTarget.addEventListener('enqueue', handleEnqueue);
-    params.reservationEventTarget.addEventListener('complete', handleComplete);
-    params.reservationEventTarget.addEventListener('cancel', handleCancel);
+  const handleRun = async (event: CustomEvent<ControlRunEventData<TArgs>>) => {
+    const { execution, abortController } = event.detail;
 
-    return {
-      stop: () => {
-        params.reservationEventTarget.removeEventListener('enqueue', handleEnqueue);
-        params.reservationEventTarget.removeEventListener('complete', handleComplete);
-        params.reservationEventTarget.removeEventListener('cancel', handleCancel);
-      },
-    };
-  },
+    try {
+      // 取り出した実行待ちの状態をrepository内でrunningに更新する。
+      await params.executionRepository.updateOne({ ...execution, status: 'running' });
 
-  enqueue: async <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: { readonly args: Readonly<TArgs> } & Pick<
-      ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>,
-      'strategy' | 'executionRepository' | 'reservationEventTarget'
-    >,
-  ): Promise<Execution<TFunc, TArgs, TReturned>> => {
-    const executedAt = await params.strategy.calculateExecutionDate({
-      executionRepository: params.executionRepository,
-    });
-    const execution = ExecutionReducers.create({ args: params.args, executedAt });
-    await params.executionRepository.createOne(execution);
+      try {
+        // 実行開始イベントを発火する。
+        dispatchExecutionQueueEvent('started', {
+          type: 'started',
+          executionId: execution.id,
+          args: execution.args,
+        });
 
-    params.reservationEventTarget.dispatchEvent(new Event('enqueue'));
+        // 取り出した実行待ちを実行する。
+        const executionDate = new Date(Math.max(execution.executedAt.getTime(), Date.now()));
+        const returned = await params.schedulableFunction(
+          execution.args,
+          executionDate,
+          abortController.signal,
+        );
 
-    return execution;
-  },
+        // 実行に成功した場合は、完了イベントを発火する。
+        dispatchExecutionQueueEvent('completed', {
+          type: 'completed',
+          executionId: execution.id,
+          args: execution.args,
+          value: returned,
+        });
+      } catch (error: unknown) {
+        // 実行に失敗した場合は、失敗イベントを発火する。
+        dispatchExecutionQueueEvent('failed', {
+          type: 'failed',
+          executionId: execution.id,
+          args: execution.args,
+          value: error,
+        });
 
-  cancel: async <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: { readonly id: ExecutionId } & Pick<
-      ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>,
-      'executionQueueState' | 'executionRepository' | 'reservationEventTarget'
-    >,
-  ): Promise<void> => {
-    const currentState = params.executionQueueState.get();
-    if (currentState.status === 'reserved' && params.id === currentState.id) {
-      currentState.abortController.abort();
-      params.executionQueueState.set({ status: 'idle' });
+        // repositoryを更新する。
+        await params.executionRepository.updateOne({ ...execution, status: 'failed' });
+
+        return;
+      }
+
+      // repositoryを更新する。
+      await params.executionRepository.updateOne({ ...execution, status: 'completed' });
+    } catch (error: unknown) {
+      // repositoryの更新でエラーが発生した場合は、エラーイベントを発火する。
+      dispatchExecutionQueueEvent('error', { type: 'error', error });
+    } finally {
+      queueState.set({ status: 'idle' });
+      dispatchControlEvent('pop', { type: 'pop' });
     }
+  };
+  const handlePop = async () => {
+    try {
+      // 次の実行待ちを取り出す。
+      const [nextExecution] = await params.executionRepository.getMany({
+        filters: { status: 'pending' },
+        orderBy: { executedAt: 'asc' },
+        limit: 1,
+      });
 
-    const execution = await params.executionRepository.getOneById(params.id);
-    if (execution?.isExecuted === true) {
-      return;
+      // 実行待ちがない場合は、何もしない。
+      if (nextExecution === undefined) {
+        dispatchControlEvent('suspend', { type: 'suspend' });
+        return;
+      }
+
+      const abortController = new AbortController();
+      queueState.set({ status: 'running', execution: nextExecution, abortController });
+      dispatchControlEvent('run', { type: 'run', execution: nextExecution, abortController });
+    } catch (error: unknown) {
+      // repositoryなどでエラーが発生した場合は、エラーイベントを発火する。
+      dispatchExecutionQueueEvent('error', { type: 'error', error });
     }
+  };
+  const handleSuspend = async () => {
+    unsubscribeControlEventHandlers?.();
+  };
+  const subscribeIfNeeded = () => {
+    if (unsubscribeControlEventHandlers === undefined) {
+      unsubscribeControlEventHandlers = subscribeHandlersToEventTarget<ControlEventData<TArgs>>(
+        { run: handleRun, pop: handlePop, suspend: handleSuspend },
+        controlEventTarget,
+      );
+    }
+  };
 
-    await params.executionRepository.deleteOneById(params.id);
-
-    params.reservationEventTarget.dispatchEvent(new Event('cancel'));
-  },
-} as const;
-
-/**
- * Create a pre-applied execution queue gateway with dependencies.
- *
- * ## Usage
- * ```ts
- * import { type ExecutionQueueState } from '@mgn901/mgn901-utils-ts/execution-queue';
- * import { createState } from '@mgn901/mgn901-utils-ts/state';
- *
- * // Declarations of `client` and `executionRepository` is omitted for brevity
- *
- * // Create a pre-applied ExecutionQueueGateway
- * const executionQueueGateway = createExecutionQueueGateway({
- *   client: client,
- *   executionQueueState: createState<ExecutionQueueState>({ status: 'idle' }),
- *   executionEventTarget: new EventTarget(),
- *   reservationEventTarget: new EventTarget(),
- *   executionRepository: executionRepository,
- *   strategy: createExecutionQueueTimeWindowRateLimitationStrategy({
- *     timeWindowRateLimitationRules: [
- *       { timeWindowMs: 5000, executionCountPerTimeWindow: 10 },
- *       { timeWindowMs: 10000, executionCountPerTimeWindow: 15 },
- *       { timeWindowMs: 20000, executionCountPerTimeWindow: 20 },
- *     ],
- *   }),
- * });
- *
- * // Start the ExecutionQueueGateway
- * executionQueueGateway.start({});
- *
- * // Enqueue a function calling
- * executionQueueGateway.enqueue({ args: [0] });
- * ```
- */
-export const createExecutionQueueGateway = <
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
->(
-  preAppliedParams: PartiallyPartial<
-    ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>,
-    'client' | 'executionEventTarget' | 'executionRepository' | 'strategy'
-  >,
-) =>
-  bulkPreApply<
-    ExecutionQueueGateway<TFunc, TArgs, TReturned>,
-    ExecutionQueueGatewayDependencies<TFunc, TArgs, TReturned>
-  >(ExecutionQueueGatewayImplementation, {
-    reservationEventTarget: new EventTarget(),
-    executionQueueState: createState<ExecutionQueueState>({ status: 'idle' }),
-    ...preAppliedParams,
+  //#region 初期化
+  const waitingExecutionsBeforeStart = await params.executionRepository.getMany({
+    filters: { status: 'pending' },
+    orderBy: { executedAt: 'asc' },
   });
-//#endregion
+  if (waitingExecutionsBeforeStart.length > 0) {
+    for (const execution of waitingExecutionsBeforeStart) {
+      const newExecutedAt = await params.calculateExecutionDate(params.executionRepository);
+      await params.executionRepository.updateOne({ ...execution, executedAt: newExecutedAt });
+      dispatchExecutionQueueEvent('scheduleUpdated', {
+        type: 'scheduleUpdated',
+        executionId: execution.id,
+        args: execution.args,
+        previousExecutedAt: execution.executedAt,
+        newExecutedAt,
+      });
+    }
+    subscribeIfNeeded();
+    dispatchControlEvent('pop', { type: 'pop' });
+  }
+  //#endregion
 
-/**
- * Parameters passed to strategy handlers for execution queue operations.
- */
-export type ExecutionQueueStrategyHandlerParams<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> = {
-  readonly executionQueueState: State<ExecutionQueueState>;
-  readonly executionRepository: ExecutionRepository<TFunc, TArgs, TReturned>;
-  readonly client: Client<Server<TFunc, TArgs, TReturned>, TArgs, TReturned, TFunc>;
-  readonly executionEventTarget: TypedEventTarget<ExecutionEvent<TFunc, TArgs, TReturned>>;
-  readonly reservationEventTarget: EventTarget;
+  return {
+    enqueue: async (...args) => {
+      const execution = {
+        id: generateId() as ExecutionId,
+        args,
+        executedAt: await params.calculateExecutionDate(params.executionRepository),
+        status: 'pending',
+      } satisfies Execution<TArgs>;
+      await params.executionRepository.createOne(execution);
+      subscribeIfNeeded();
+      dispatchControlEvent('pop', { type: 'pop' });
+      return { executionId: execution.id, executedAt: execution.executedAt };
+    },
+
+    cancel: async (executionId, reason) => {
+      const queueStateValue = queueState.get();
+      if (queueStateValue.status === 'running' && queueStateValue?.execution.id === executionId) {
+        queueStateValue.abortController.abort(reason);
+      } else {
+        await params.executionRepository.deleteOneById(executionId);
+        subscribeIfNeeded();
+        dispatchControlEvent('pop', { type: 'pop' });
+      }
+    },
+  };
 };
 
-/**
- * Interface for pluggable execution queue strategies (e.g., scheduling, rate limiting).
- */
-export type ExecutionQueueStrategy<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
-> = {
-  calculateExecutionDate(params: {
-    readonly executionRepository: ExecutionRepository<TFunc, TArgs, TReturned>;
-  }): Promise<Date>;
-
-  handleEnqueue(
-    params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>,
-  ): Promise<void>;
-
-  handleComplete(
-    params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>,
-  ): Promise<void>;
-
-  handleCancel(params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>): Promise<void>;
-
-  handleStart(params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>): Promise<void>;
-};
-
-/**
- * Dependencies for the {@linkcode ExecutionQueueTimeWindowRateLimitationStrategy}.
- */
-export type ExecutionQueueTimeWindowRateLimitationStrategyDependencies = {
-  readonly timeWindowRateLimitationRules: readonly TimeWindowRateLimitationRule[];
-};
-
-/**
- * Strategy implementation of {@linkcode ExecutionQueueStrategy} for time window rate limiting of executions.
- */
-export const ExecutionQueueTimeWindowRateLimitationStrategy = {
-  calculateExecutionDate<
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: {
-      readonly executionRepository: ExecutionRepository<TFunc, TArgs, TReturned>;
-    } & ExecutionQueueTimeWindowRateLimitationStrategyDependencies,
-  ): Promise<Date> {
-    return calculateNextExecutionDate({
-      timeWindowRateLimitationRules: params.timeWindowRateLimitationRules,
+export const createCalculateExecutionDateFromTimeWindowRateLimitationRules =
+  (rules: readonly TimeWindowRateLimitationRule[]): CalculateExecutionDate =>
+  async (repository) =>
+    calculateNextExecutionDate({
+      timeWindowRateLimitationRules: rules,
       getNewestExecutionDateInLatestTimeWindow: async () =>
-        (await params.executionRepository.getMany({ orderBy: { executedAt: 'desc' }, limit: 1 }))[0]
-          ?.executedAt ?? new Date(),
+        (await repository.getMany({ orderBy: { executedAt: 'desc' }, limit: 1 }))[0]?.executedAt ??
+        new Date(),
       getOldestExecutionDateInLatestTimeWindow: async (startOfLastTimeWindow: Date) =>
         (
-          await params.executionRepository.getMany({
-            filters: { executedAt: { from: startOfLastTimeWindow } },
+          await repository.getMany({
+            filters: { executedAt: ['lte', startOfLastTimeWindow] },
             orderBy: { executedAt: 'asc' },
             limit: 1,
           })
         )[0]?.executedAt,
       countExecutionsInLatestTimeWindow: (startOfLastTimeWindow: Date) =>
-        params.executionRepository.count({
-          filters: { executedAt: { from: startOfLastTimeWindow } },
-        }),
+        repository.count({ filters: { executedAt: ['lte', startOfLastTimeWindow] } }),
     });
-  },
-
-  handleEnqueue: <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>,
-  ): Promise<void> => {
-    return ExecutionQueueTimeWindowRateLimitationStrategy.handleNext(params);
-  },
-
-  handleComplete: <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>,
-  ): Promise<void> => {
-    return ExecutionQueueTimeWindowRateLimitationStrategy.handleNext(params);
-  },
-
-  handleCancel: <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>,
-  ): Promise<void> => {
-    return ExecutionQueueTimeWindowRateLimitationStrategy.handleNext(params);
-  },
-
-  handleStart: async <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned> &
-      ExecutionQueueTimeWindowRateLimitationStrategyDependencies,
-  ): Promise<void> => {
-    const waitingExecutions = await params.executionRepository.getMany({
-      filters: { isExecuted: false },
-      orderBy: { executedAt: 'asc' },
-    });
-    for (const execution of waitingExecutions) {
-      const newExecutedAt =
-        await ExecutionQueueTimeWindowRateLimitationStrategy.calculateExecutionDate({
-          executionRepository: params.executionRepository,
-          timeWindowRateLimitationRules: params.timeWindowRateLimitationRules,
-        });
-      const updatedExecution = ExecutionReducers.toExecutionDateUpdated<
-        FromRepository<Execution<TFunc, TArgs, TReturned>>,
-        TFunc,
-        TArgs,
-        TReturned
-      >(execution, { newExecutedAt });
-      params.executionRepository.updateOne(updatedExecution);
-    }
-    return ExecutionQueueTimeWindowRateLimitationStrategy.handleNext(params);
-  },
-
-  handleNext: async <
-    TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-    TArgs extends unknown[] = Parameters<TFunc>,
-    TReturned = ReturnType<TFunc>,
-  >(
-    params: ExecutionQueueStrategyHandlerParams<TFunc, TArgs, TReturned>,
-  ): Promise<void> => {
-    // すでに予約された実行がある場合は、何もしない。
-    if (params.executionQueueState.get().status !== 'idle') {
-      return;
-    }
-
-    // 次の実行待ちを取り出す。
-    const [nextExecution] = await params.executionRepository.getMany({
-      filters: { isExecuted: false },
-      orderBy: { executedAt: 'asc' },
-      limit: 1,
-    });
-    if (nextExecution === undefined) {
-      return;
-    }
-
-    // 次の実行待ちを予約する。
-    const abortController = new AbortController();
-    params.executionQueueState.set({
-      status: 'reserved',
-      id: nextExecution.id,
-      abortController: new AbortController(),
-    });
-    const executionDate = new Date(Math.max(nextExecution.executedAt.getTime(), Date.now()));
-
-    executeAt({
-      date: executionDate,
-      func: async () => {
-        const returned = await params.client.request(...nextExecution.args);
-        await params.executionRepository.updateOne(
-          ExecutionReducers.toExecuted<typeof nextExecution, TFunc, TArgs, TReturned>(
-            nextExecution,
-          ),
-        );
-
-        params.executionQueueState.set({ status: 'idle' });
-
-        params.executionEventTarget.dispatchEvent(
-          new ExecutionCompleteEvent<TFunc, TArgs, TReturned>({
-            id: nextExecution.id,
-            args: nextExecution.args,
-            returned,
-          }),
-        );
-
-        params.reservationEventTarget.dispatchEvent(new Event('complete'));
-      },
-      abortSignal: abortController.signal,
-    });
-  },
-} as const;
-
-/**
- * Create a pre-applied {@linkcode ExecutionQueueStrategy} for time window rate limiting.
- */
-export const createExecutionQueueTimeWindowRateLimitationStrategy = <
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends unknown[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
->(
-  preAppliedParams: ExecutionQueueTimeWindowRateLimitationStrategyDependencies,
-) =>
-  bulkPreApply<
-    ExecutionQueueStrategy<TFunc, TArgs, TReturned>,
-    ExecutionQueueTimeWindowRateLimitationStrategyDependencies
-  >(ExecutionQueueTimeWindowRateLimitationStrategy, preAppliedParams);

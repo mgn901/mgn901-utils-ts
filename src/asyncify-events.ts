@@ -22,14 +22,14 @@ type AbortRequest = {
 type Response<TReturned> = {
   readonly type: 'response';
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
-  readonly returned: TReturned;
+  readonly value: TReturned;
 };
 
 /** @internal */
 type ErrorResponse = {
   readonly type: 'errorResponse';
   readonly id: NominalPrimitive<Id, typeof messageTypeSymbol>;
-  readonly returned: unknown;
+  readonly value: unknown;
 };
 
 export type AbortableFunction<TArgs extends unknown[], TReturned> = (
@@ -161,9 +161,9 @@ export const abortableClientFromPort = <
     // resolve/rejectを呼び出す。
     const callback = pendingCallbacks.get(response.id);
     if (response.type === 'errorResponse') {
-      callback?.[1](response.returned);
+      callback?.[1](response.value);
     } else {
-      callback?.[0](response.returned);
+      callback?.[0](response.value);
     }
 
     // resolve/rejectとリクエストIDの紐付けを解除する。
@@ -258,9 +258,9 @@ export const startAbortableServerFromPort = <TArgs extends unknown[], TReturned>
     abortControllers.set(request.id, abortController);
     try {
       const returned = await func(request.args, abortController.signal);
-      port.send<Response<TReturned>>({ type: 'response', id: request.id, returned });
+      port.send<Response<TReturned>>({ type: 'response', id: request.id, value: returned });
     } catch (error: unknown) {
-      port.send<ErrorResponse>({ type: 'errorResponse', id: request.id, returned: error });
+      port.send<ErrorResponse>({ type: 'errorResponse', id: request.id, value: error });
     } finally {
       abortControllers.delete(request.id);
     }
