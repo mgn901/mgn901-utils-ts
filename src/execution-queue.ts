@@ -209,6 +209,11 @@ export const executionQueue = async <
     }
   };
   const handlePop = async () => {
+    if (queueState.get().status === 'running') {
+      // すでに実行中の場合は、何もしない。
+      return;
+    }
+
     try {
       // 次の実行待ちを取り出す。
       const [nextExecution] = await params.executionRepository.getMany({
