@@ -19,7 +19,7 @@ export type Execution<TArgs extends unknown[]> = {
   readonly id: ExecutionId;
   readonly args: TArgs;
   readonly executedAt: Date;
-  readonly status: 'pending' | 'canceled' | 'running' | 'completed' | 'failed';
+  readonly status: 'pending' | 'running' | 'completed' | 'failed';
 };
 
 export type Enqueue<TArgs extends unknown[]> = (
