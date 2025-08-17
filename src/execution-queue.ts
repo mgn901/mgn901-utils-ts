@@ -110,7 +110,6 @@ export type ExecutionRepository<
   updateOne(this: unknown, execution: FromRepository<Execution<TArgs>>): Promise<void>;
   deleteOneById(this: unknown, executionId: ExecutionId): Promise<void>;
 };
-//#endregion
 
 type StateValue<TArgs extends unknown[]> =
   | {
@@ -133,7 +132,7 @@ type ControlRunEventData<TArgs extends unknown[]> = {
 type ControlSuspendEventData = { readonly type: 'suspend' };
 //#endregion
 
-export const executionQueue = async <
+export const executionQueueFrom = async <
   TFunc extends SchedulableFunction<TArgs, TReturned>,
   TArgs extends unknown[] = Parameters<TFunc>[0],
   TReturned = Awaited<ReturnType<TFunc>>,
@@ -297,7 +296,7 @@ export const executionQueue = async <
   };
 };
 
-export const createCalculateExecutionDateFromTimeWindowRateLimitationRules =
+export const calculateExecutionDateFunctionFromTimeWindowRateLimitationRules =
   (rules: readonly TimeWindowRateLimitationRule[]): CalculateExecutionDate =>
   async (repository) =>
     calculateNextExecutionDate({
