@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, jest, test } from '@jest/globals';
-import { Client, EventTargetTerminal, Server } from './asyncify-events.js';
 import {
+  type Cancel,
+  type Enqueue,
   type Execution,
-  type ExecutionEvent,
   type ExecutionId,
   type ExecutionRepository,
-  createExecutionQueueGateway,
-  createExecutionQueueTimeWindowRateLimitationStrategy,
+  createCalculateExecutionDateFromTimeWindowRateLimitationRules,
+  executionQueue,
 } from './execution-queue.js';
 import {
   type Filters,
@@ -14,19 +14,17 @@ import {
   type OrderBy,
   repositorySymbol,
 } from './repository-utils.js';
-import type { TypedEventTarget } from './typed-event-target.js';
+import { type SchedulableFunction, schedulableFunctionFromFunction } from './timer.js';
 
 class ExecutionRepositoryMock<
-  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
-  TArgs extends never[] = Parameters<TFunc>,
-  TReturned = ReturnType<TFunc>,
+  TFunc extends SchedulableFunction<TArgs, TReturned>,
+  TArgs extends never[] = Parameters<TFunc>[0],
+  TReturned = Awaited<ReturnType<TFunc>>,
 > implements ExecutionRepository<TFunc, TArgs, TReturned>
 {
-  public readonly underlyingMap = new Map<ExecutionId, Execution<TFunc, TArgs, TReturned>>();
+  public readonly underlyingMap = new Map<ExecutionId, Execution<TArgs>>();
 
-  public async getOneById(
-    id: ExecutionId,
-  ): Promise<FromRepository<Execution<TFunc, TArgs, TReturned>> | undefined> {
+  public async getOneById(id: ExecutionId): Promise<FromRepository<Execution<TArgs>> | undefined> {
     const latestVersion = this.underlyingMap.get(id);
     if (latestVersion === undefined) {
       return undefined;
@@ -35,15 +33,11 @@ class ExecutionRepositoryMock<
   }
 
   public async getMany(params: {
-    readonly filters?: Filters<
-      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
-    >;
-    readonly orderBy: OrderBy<
-      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
-    >;
+    readonly filters?: Filters<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
+    readonly orderBy: OrderBy<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
     readonly offset?: number | undefined;
     readonly limit?: number | undefined;
-  }): Promise<readonly FromRepository<Execution<TFunc, TArgs, TReturned>>[] | readonly []> {
+  }): Promise<readonly FromRepository<Execution<TArgs>>[] | readonly []> {
     return (await this.getExecutionsBase(params))
       .sort(
         (a, b) =>
@@ -58,18 +52,14 @@ class ExecutionRepositoryMock<
   }
 
   public async count(params: {
-    readonly filters?: Filters<
-      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
-    >;
+    readonly filters?: Filters<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
   }): Promise<number> {
     return (await this.getExecutionsBase(params)).length;
   }
 
   private async getExecutionsBase(params: {
-    readonly filters?: Filters<
-      Pick<Execution<TFunc, TArgs, TReturned>, 'executedAt' | 'isExecuted'>
-    >;
-  }): Promise<Execution<TFunc, TArgs, TReturned>[]> {
+    readonly filters?: Filters<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
+  }): Promise<Execution<TArgs>[]> {
     return [...this.underlyingMap.entries()]
       .filter(([_, execution]) => {
         const conditions = [
@@ -77,15 +67,15 @@ class ExecutionRepositoryMock<
             execution.executedAt.getTime() === params.filters.executedAt.getTime(),
 
           params.filters?.executedAt instanceof Date === true ||
-            params.filters?.executedAt?.from === undefined ||
-            params.filters.executedAt.from <= execution.executedAt,
+            params.filters?.executedAt?.[0] !== 'lte' ||
+            params.filters.executedAt[1] <= execution.executedAt,
 
           params.filters?.executedAt instanceof Date === true ||
-            params.filters?.executedAt?.until === undefined ||
-            execution.executedAt <= params.filters.executedAt.until,
+            params.filters?.executedAt?.[0] !== 'gte' ||
+            execution.executedAt <= params.filters.executedAt[1],
 
-          params.filters?.isExecuted === undefined ||
-            execution.isExecuted === params.filters.isExecuted,
+          // 文字列の他のクエリは使わないので未サポート
+          typeof params.filters?.status !== 'string' || execution.status === params.filters?.status,
         ];
 
         return !conditions.some((condition) => condition === false);
@@ -93,11 +83,11 @@ class ExecutionRepositoryMock<
       .map(([_, execution]) => execution);
   }
 
-  public async createOne(execution: Execution<TFunc, TArgs, TReturned>): Promise<void> {
+  public async createOne(execution: Execution<TArgs>): Promise<void> {
     this.underlyingMap.set(execution.id, execution);
   }
 
-  public async updateOne(execution: Execution<TFunc, TArgs, TReturned>): Promise<void> {
+  public async updateOne(execution: Execution<TArgs>): Promise<void> {
     this.underlyingMap.set(execution.id, execution);
   }
 
@@ -108,45 +98,39 @@ class ExecutionRepositoryMock<
 
 const expectedExecutionDateMap = new Map<number, Date>();
 const actualExecutionDateMap = new Map<number, Date>();
-const me = new EventTarget();
-const destination = new EventTarget();
-const server = new Server<(id: number) => Date>({
-  terminal: new EventTargetTerminal({ me: destination, destination: me }),
-  func: (id: number) => {
-    const actualExecutedDate = new Date();
-    actualExecutionDateMap.set(id, actualExecutedDate);
-    return actualExecutedDate;
-  },
-});
-const client = new Client<typeof server>({
-  terminal: new EventTargetTerminal({ me, destination }),
-});
-const executionRepository = new ExecutionRepositoryMock<(id: number) => void>();
+const func = (id: number) => {
+  const actualExecutedDate = new Date();
+  actualExecutionDateMap.set(id, actualExecutedDate);
+  return actualExecutedDate;
+};
+const schedulableFunction = schedulableFunctionFromFunction(func);
+const executionRepository = new ExecutionRepositoryMock<SchedulableFunction<[number], Date>>();
+const executionQueueEventTarget = new EventTarget();
+
 const timeWindowRateLimitationRules = [
   { timeWindowMs: 5000, executionCountPerTimeWindow: 10 },
   { timeWindowMs: 10000, executionCountPerTimeWindow: 15 },
   { timeWindowMs: 20000, executionCountPerTimeWindow: 20 },
 ];
 
-const executionEventTarget: TypedEventTarget<ExecutionEvent<(id: number) => Date>> =
-  new EventTarget();
-
-const executionQueueGateway = createExecutionQueueGateway({
-  client,
-  executionEventTarget,
-  executionRepository,
-  strategy: createExecutionQueueTimeWindowRateLimitationStrategy({ timeWindowRateLimitationRules }),
-});
-
-jest.useFakeTimers();
-jest.spyOn(global, 'setTimeout');
-jest.spyOn(global, 'setInterval');
+let executionQueueGateway: { readonly enqueue: Enqueue<[number]>; readonly cancel: Cancel };
 
 beforeAll(async () => {
-  executionQueueGateway.start({});
+  jest.useFakeTimers();
+  jest.spyOn(global, 'setTimeout');
+  jest.spyOn(global, 'setInterval');
+
+  executionQueueGateway = await executionQueue({
+    schedulableFunction,
+    executionQueueEventTarget,
+    executionRepository,
+    calculateExecutionDate: createCalculateExecutionDateFromTimeWindowRateLimitationRules(
+      timeWindowRateLimitationRules,
+    ),
+  });
 
   for (let i = 0; i < 100; i += 1) {
-    const { executedAt } = await executionQueueGateway.enqueue({ args: [i] });
+    const { executedAt } = await executionQueueGateway.enqueue(i);
     expectedExecutionDateMap.set(i, executedAt);
   }
 });
@@ -183,7 +167,7 @@ describe('ExecutionQueueWithTimeWindowRateLimitation', () => {
           Math.abs(actualExecutedDate?.getTime() - expectedExecutionDate.getTime()),
         ).toBeLessThanOrEqual(1);
       });
-      expect(await executionRepository.count({ filters: { isExecuted: true } })).toEqual(100);
+      expect(await executionRepository.count({ filters: { status: 'completed' } })).toEqual(100);
     });
   });
 });

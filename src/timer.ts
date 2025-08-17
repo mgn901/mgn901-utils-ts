@@ -1,3 +1,5 @@
+import type { AbortableFunction } from './asyncify-events.js';
+
 /**
  * 指定された時間だけ待って解決する`Promise`を返す。
  * - `abortSignal`を指定していて、`abortSignal`に紐付いている`AbortController`で`abort`を呼び出した場合、返した`Promise`を拒否する。
@@ -57,3 +59,35 @@ export const executeAt = async <TFunc extends () => TReturned, TReturned>(params
   await sleep({ timeoutMs: date.getTime() - now.getTime(), abortSignal, timerResetIntervalMs });
   return func();
 };
+
+export type SchedulableFunction<TArgs extends unknown[], TReturned> = (
+  args: TArgs,
+  date: Date,
+  abortSignal?: AbortSignal,
+) => Promise<TReturned>;
+
+export const schedulableFunctionFromFunction = <
+  TFunc extends (this: unknown, ...args: TArgs) => TReturned,
+  TArgs extends unknown[] = Parameters<TFunc>,
+  TReturned = ReturnType<TFunc>,
+>(
+  func: TFunc,
+  timerResetIntervalMs?: number,
+): SchedulableFunction<TArgs, TReturned> => {
+  const abortableFunction = (args: TArgs) => func(...args);
+  return schedulableFunctionFromAbortableFunction(abortableFunction, timerResetIntervalMs);
+};
+
+export const schedulableFunctionFromAbortableFunction =
+  <
+    TFunc extends AbortableFunction<TArgs, TReturned>,
+    TArgs extends unknown[] = Parameters<TFunc>[0],
+    TReturned = ReturnType<TFunc>,
+  >(
+    func: TFunc,
+    timerResetIntervalMs?: number,
+  ): SchedulableFunction<TArgs, TReturned> =>
+  async (args, date, abortSignal) => {
+    await sleep({ timeoutMs: date.getTime() - Date.now(), abortSignal, timerResetIntervalMs });
+    return func(args, abortSignal);
+  };
