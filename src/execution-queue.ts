@@ -131,6 +131,7 @@ type ControlRunEventData<TArgs extends unknown[]> = {
   readonly abortController: AbortController;
 };
 type ControlSuspendEventData = { readonly type: 'suspend' };
+//#endregion
 
 export const executionQueue = async <
   TFunc extends SchedulableFunction<TArgs, TReturned>,

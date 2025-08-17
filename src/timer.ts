@@ -73,7 +73,7 @@ export const schedulableFunctionFromFunction = <
 >(
   func: TFunc,
   timerResetIntervalMs?: number,
-): SchedulableFunction<TArgs, TReturned> => {
+): SchedulableFunction<TArgs, Awaited<TReturned>> => {
   const abortableFunction = (args: TArgs) => func(...args);
   return schedulableFunctionFromAbortableFunction(abortableFunction, timerResetIntervalMs);
 };
@@ -86,8 +86,9 @@ export const schedulableFunctionFromAbortableFunction =
   >(
     func: TFunc,
     timerResetIntervalMs?: number,
-  ): SchedulableFunction<TArgs, TReturned> =>
-  async (args, date, abortSignal) => {
+  ): SchedulableFunction<TArgs, Awaited<TReturned>> =>
+  async (args, date, abortSignal): Promise<Awaited<TReturned>> => {
     await sleep({ timeoutMs: date.getTime() - Date.now(), abortSignal, timerResetIntervalMs });
-    return func(args, abortSignal);
+    const returned = await func(args, abortSignal);
+    return returned;
   };
