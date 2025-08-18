@@ -132,16 +132,40 @@ type ControlRunEventData<TArgs extends unknown[]> = {
 type ControlSuspendEventData = { readonly type: 'suspend' };
 //#endregion
 
+/**
+ * Creates a queue that manages the scheduling and execution of a function, and returns enqueue and cancel function.
+ *
+ * By calling `enqueue`, you can add a new execution to the queue and get an execution ID and execution date for the execution.
+ * On the execution date, the specified `scheduledFunction` will be executed with the provided arguments.
+ *
+ * On started, completed and failed the execution, the queue will dispatch events to the specified `executionQueueEventTarget`.
+ * You can use these events to monitor the execution status and get results.
+ * When the queue is started with the specified `executionRepository` that has pending executions, it will automatically reschedule and start executing them.
+ *
+ * You can cancel a scheduled execution by calling `cancel` with an execution ID.
+ *
+ * @param params Parameters for creating an execution queue.
+ * @returns A promise that resolves to an object containing `enqueue` and `cancel` functions.
+ */
 export const executionQueueFrom = async <
   TFunc extends SchedulableFunction<TArgs, TReturned>,
   TArgs extends unknown[] = Parameters<TFunc>[0],
   TReturned = Awaited<ReturnType<TFunc>>,
 >(params: {
+  /** The function called when an execution is scheduled. */
   readonly schedulableFunction: TFunc;
+  /** The function to calculate the execution date based on the current state of the repository. */
   readonly calculateExecutionDate: CalculateExecutionDate;
+  /** The EventTarget to dispatch `CustomEvent<`{@linkcode ExecutionQueueEventData}`>`. */
   readonly executionQueueEventTarget: EventTarget;
+  /** The repository to manage and persist execution states. */
   readonly executionRepository: ExecutionRepository<TFunc, TArgs, TReturned>;
-}): Promise<{ readonly enqueue: Enqueue<TArgs>; readonly cancel: Cancel }> => {
+}): Promise<{
+  /** A function to enqueue a new execution with the specified arguments and returns the execution ID and execution date. */
+  readonly enqueue: Enqueue<TArgs>;
+  /** A function to cancel the specified scheduled execution by its ID. */
+  readonly cancel: Cancel;
+}> => {
   const queueState = createState<StateValue<TArgs>>({ status: 'idle' });
   const controlEventTarget = new EventTarget();
   let unsubscribeControlEventHandlers: (() => void) | undefined;
@@ -296,6 +320,11 @@ export const executionQueueFrom = async <
   };
 };
 
+/**
+ * Returns a {@linkcode CalculateExecutionDate} function that calculates the next execution date based on the provided list of {@linkcode TimeWindowRateLimitationRule}.
+ *
+ * @param rules The list of {@linkcode TimeWindowRateLimitationRule} to use for calculating the next execution date.
+ */
 export const calculateExecutionDateFunctionFromTimeWindowRateLimitationRules =
   (rules: readonly TimeWindowRateLimitationRule[]): CalculateExecutionDate =>
   async (repository) =>

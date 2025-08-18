@@ -60,6 +60,13 @@ export type SchedulableFunction<TArgs extends unknown[], TReturned> = (
   abortSignal?: AbortSignal,
 ) => Promise<TReturned>;
 
+/**
+ * Returns a function that calls the specified`func` on the specified date.
+ *
+ * @param func The function to be called at the specified date.
+ * @param timerResetIntervalMs The interval in milliseconds at which the timer should be reset. If `0` or negative, it will be treated as the same value as `timeoutMs`.
+ * @returns A function that takes arguments in one `Array`, a `Date`, and an optional `AbortSignal`, and returns a promise that resolves with the result of calling `func` at the specified date.
+ */
 export const schedulableFunctionFromFunction = <
   TFunc extends (this: unknown, ...args: TArgs) => TReturned,
   TArgs extends unknown[] = Parameters<TFunc>,
@@ -72,6 +79,13 @@ export const schedulableFunctionFromFunction = <
   return schedulableFunctionFromAbortableFunction(abortableFunction, timerResetIntervalMs);
 };
 
+/**
+ * Returns a function that calls the specified`func` on the specified date.
+ *
+ * @param func The abortable function to be called at the specified date.
+ * @param timerResetIntervalMs The interval in milliseconds at which the timer should be reset. If `0` or negative, it will be treated as the same value as `timeoutMs`.
+ * @returns A function that takes arguments in one `Array`, a `Date`, and an optional `AbortSignal`, and returns a promise that resolves with the result of calling `func` at the specified date.
+ */
 export const schedulableFunctionFromAbortableFunction =
   <
     TFunc extends AbortableFunction<TArgs, TReturned>,
@@ -81,6 +95,14 @@ export const schedulableFunctionFromAbortableFunction =
     func: TFunc,
     timerResetIntervalMs?: number,
   ): SchedulableFunction<TArgs, Awaited<TReturned>> =>
+  /**
+   * Calls the specified function at the specified date.
+   *
+   * @param args The arguments to be passed to the function.
+   * @param date The date at which the function should be called.
+   * @param abortSignal An optional `AbortSignal` that can be used to abort the execution. If the function is `AbortableFunction`, it will also be passed to the function.
+   * @returns A promise that resolves with the result of calling `func` at the specified date.
+   */
   async (args, date, abortSignal): Promise<Awaited<TReturned>> => {
     await sleep({ timeoutMs: date.getTime() - Date.now(), abortSignal, timerResetIntervalMs });
     const returned = await func(args, abortSignal);
