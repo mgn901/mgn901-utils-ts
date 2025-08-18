@@ -3,14 +3,24 @@ import type { AbortableFunction } from './asyncify-events.js';
 /**
  * 指定された時間だけ待って解決する`Promise`を返す。
  * - `abortSignal`を指定していて、`abortSignal`に紐付いている`AbortController`で`abort`を呼び出した場合、返した`Promise`を拒否する。
+ * - `timerResetIntervalMs`が`0`や負の値の場合、`timeoutMs`と同じ値を指定したものとする。
  */
 export const sleep = (params: {
   readonly timeoutMs: number;
   readonly abortSignal?: AbortSignal | undefined;
   readonly timerResetIntervalMs?: number | undefined;
 }): Promise<void> => {
+  const DEFAULT_TIMER_RESET_INTERVAL_MS = 1000;
+
   const { timeoutMs, abortSignal, timerResetIntervalMs } = params;
   const endDate = new Date(Date.now() + Math.max(timeoutMs, 0));
+  const usedTimerResetIntervalMs = (() => {
+    const nonUndefinedInterval = timerResetIntervalMs ?? DEFAULT_TIMER_RESET_INTERVAL_MS;
+    const positiveInterval = nonUndefinedInterval <= 0 ? timeoutMs : nonUndefinedInterval;
+    const subtractedInterval =
+      timeoutMs % positiveInterval === 0 ? positiveInterval - 1 : positiveInterval;
+    return Math.max(subtractedInterval, 0);
+  })();
 
   return new Promise((resolve, reject) => {
     // biome-ignore lint/style/useConst: `timeoutId`の代入よりも先に`onAbort`などで参照するため
@@ -20,7 +30,7 @@ export const sleep = (params: {
     const onAbort = () => {
       clearTimeout(endDateTimeout);
       clearInterval(periodicResetInterval);
-      reject(abortSignal?.reason);
+      reject(new Error(abortSignal?.reason));
     };
     abortSignal?.addEventListener('abort', onAbort);
 
@@ -40,7 +50,7 @@ export const sleep = (params: {
       }
 
       endDateTimeout = setTimeout(onEndDate, Math.max(endDate.getTime() - Date.now(), 0));
-    }, timerResetIntervalMs ?? 1000);
+    }, usedTimerResetIntervalMs);
   });
 };
 
