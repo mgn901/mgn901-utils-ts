@@ -4,16 +4,16 @@ type DefaultEventHandlers<T extends { type: string }> = {
 };
 
 export const dispatchFunctionFromEventTarget =
-  <T extends { type: string }>(
+  <TDetail extends { type: string }>(
     eventTarget: EventTarget,
-  ): (<K extends T['type']>(eventName: K, detail: Extract<T, { type: K }>) => void) =>
+  ): (<K extends TDetail['type']>(eventName: K, detail: Extract<TDetail, { type: K }>) => void) =>
   (eventName, detail) => {
-    eventTarget.dispatchEvent(new CustomEvent<T>(eventName, { detail: detail }));
+    eventTarget.dispatchEvent(new CustomEvent<TDetail>(eventName, { detail: detail }));
   };
 
 export const subscribeHandlersToEventTarget = <
-  T extends { type: string },
-  THandlers extends DefaultEventHandlers<T> = DefaultEventHandlers<T>,
+  TDetail extends { type: string },
+  THandlers extends DefaultEventHandlers<TDetail> = DefaultEventHandlers<TDetail>,
 >(
   handlers: THandlers,
   eventTarget: EventTarget,
