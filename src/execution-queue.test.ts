@@ -169,7 +169,7 @@ describe('execution-queue', () => {
           Math.abs(actualExecutionDate?.getTime() - expectedExecutionDate.getTime()),
         ).toBeLessThanOrEqual(1);
       });
-      expect(await executionRepository.count({ filters: { status: 'completed' } })).toEqual(100);
+      expect(await executionRepository.count({ filters: { status: 'completed' } })).toBe(100);
     });
   });
 
@@ -225,9 +225,6 @@ describe('execution-queue', () => {
     );
     const executionQueueEventTarget = new EventTarget();
     let executionQueue: Awaited<ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>>;
-    let executionQueueWithDelayedInitialization: Awaited<
-      ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>
-    >;
     const startedHandler = jest.fn();
     const completedHandler = jest.fn();
     const failedHandler = jest.fn();
@@ -316,7 +313,7 @@ describe('execution-queue', () => {
       });
       await jest.advanceTimersByTimeAsync(10000);
 
-      executionQueueWithDelayedInitialization = await executionQueueFrom({
+      const executionQueueWithDelayedInitialization = await executionQueueFrom({
         schedulableFunction: schedulableFunction,
         calculateExecutionDate: calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
           timeWindowRateLimitationRules,
@@ -385,7 +382,7 @@ describe('execution-queue', () => {
 
       expect(execution).toBeDefined();
       expect(execution?.args).toEqual([1, false]);
-      expect(execution?.status).toEqual('pending');
+      expect(execution?.status).toBe('pending');
     });
 
     test('execution queue should update the execution in the repository when completed', async () => {
@@ -396,14 +393,14 @@ describe('execution-queue', () => {
 
       expect(executionRunning).toBeDefined();
       expect(executionRunning?.args).toEqual([1, false]);
-      expect(executionRunning?.status).toEqual('running');
+      expect(executionRunning?.status).toBe('running');
 
       await jest.advanceTimersByTimeAsync(1000);
       const executionCompleted = await executionRepository.getOneById(executionId);
 
       expect(executionCompleted).toBeDefined();
       expect(executionCompleted?.args).toEqual([1, false]);
-      expect(executionCompleted?.status).toEqual('completed');
+      expect(executionCompleted?.status).toBe('completed');
     });
 
     test('execution queue should update the execution in the repository when failed', async () => {
@@ -415,7 +412,7 @@ describe('execution-queue', () => {
 
       expect(execution).toBeDefined();
       expect(execution?.args).toEqual([1, true]);
-      expect(execution?.status).toEqual('failed');
+      expect(execution?.status).toBe('failed');
     });
   });
 });

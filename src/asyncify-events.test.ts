@@ -91,7 +91,7 @@ describe('asyncify-events', () => {
 
     test('client can send a request and receive a response', async () => {
       const resultPromise = request(1, 2);
-      jest.advanceTimersByTime(1000);
+      await jest.advanceTimersByTimeAsync(1000);
 
       expect(resultPromise).resolves.toBe(3);
       // Ensure that one request makes one call to the server function
@@ -104,7 +104,7 @@ describe('asyncify-events', () => {
         const resultPromise = request(i, i + 1);
         resultPromises.push(resultPromise);
       }
-      jest.advanceTimersByTime(1000);
+      await jest.advanceTimersByTimeAsync(1000);
       const results = await Promise.all(resultPromises);
 
       results.forEach((result, index) => {
@@ -132,7 +132,7 @@ describe('asyncify-events', () => {
 
     test('client can send a request and receive a response', async () => {
       const resultPromise = request([1, 2]);
-      jest.advanceTimersByTime(1000);
+      await jest.advanceTimersByTimeAsync(1000);
 
       expect(resultPromise).resolves.toBe(3);
       // Ensure that one request makes one call to the server function
