@@ -44,22 +44,6 @@ export const sleep = (params: {
   });
 };
 
-/**
- * 指定された日時に指定された関数を呼び出し、その戻り値で解決する`Promise`を返す。
- * - `abortSignal`を指定していて、`abortSignal`に紐付いている`AbortController`で`abort`を呼び出した場合、返した`Promise`を拒否する。
- */
-export const executeAt = async <TFunc extends () => TReturned, TReturned>(params: {
-  readonly date: Date;
-  readonly func: TFunc;
-  readonly abortSignal?: AbortSignal | undefined;
-  readonly timerResetIntervalMs?: number | undefined;
-}): Promise<TReturned> => {
-  const { date, func, abortSignal, timerResetIntervalMs } = params;
-  const now = new Date();
-  await sleep({ timeoutMs: date.getTime() - now.getTime(), abortSignal, timerResetIntervalMs });
-  return func();
-};
-
 export type SchedulableFunction<TArgs extends unknown[], TReturned> = (
   args: TArgs,
   date: Date,
