@@ -1,5 +1,7 @@
 export interface TimeWindowRateLimitationRule {
+  /** The size of the time window in milliseconds. */
   readonly timeWindowMs: number;
+  /** The allowed number of executions within the time window. */
   readonly executionCountPerTimeWindow: number;
 }
 

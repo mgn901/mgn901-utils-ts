@@ -3,14 +3,24 @@ import type { AbortableFunction } from './asyncify-events.js';
 /**
  * 指定された時間だけ待って解決する`Promise`を返す。
  * - `abortSignal`を指定していて、`abortSignal`に紐付いている`AbortController`で`abort`を呼び出した場合、返した`Promise`を拒否する。
+ * - `timerResetIntervalMs`が`0`や負の値の場合、`timeoutMs`と同じ値を指定したものとする。
  */
 export const sleep = (params: {
   readonly timeoutMs: number;
   readonly abortSignal?: AbortSignal | undefined;
   readonly timerResetIntervalMs?: number | undefined;
 }): Promise<void> => {
+  const DEFAULT_TIMER_RESET_INTERVAL_MS = 1000;
+
   const { timeoutMs, abortSignal, timerResetIntervalMs } = params;
   const endDate = new Date(Date.now() + Math.max(timeoutMs, 0));
+  const usedTimerResetIntervalMs = (() => {
+    const nonUndefinedInterval = timerResetIntervalMs ?? DEFAULT_TIMER_RESET_INTERVAL_MS;
+    const positiveInterval = nonUndefinedInterval <= 0 ? timeoutMs : nonUndefinedInterval;
+    const subtractedInterval =
+      timeoutMs % positiveInterval === 0 ? positiveInterval - 1 : positiveInterval;
+    return Math.max(subtractedInterval, 0);
+  })();
 
   return new Promise((resolve, reject) => {
     // biome-ignore lint/style/useConst: `timeoutId`の代入よりも先に`onAbort`などで参照するため
@@ -20,7 +30,7 @@ export const sleep = (params: {
     const onAbort = () => {
       clearTimeout(endDateTimeout);
       clearInterval(periodicResetInterval);
-      reject(abortSignal?.reason);
+      reject(new Error(abortSignal?.reason));
     };
     abortSignal?.addEventListener('abort', onAbort);
 
@@ -40,24 +50,8 @@ export const sleep = (params: {
       }
 
       endDateTimeout = setTimeout(onEndDate, Math.max(endDate.getTime() - Date.now(), 0));
-    }, timerResetIntervalMs ?? 1000);
+    }, usedTimerResetIntervalMs);
   });
-};
-
-/**
- * 指定された日時に指定された関数を呼び出し、その戻り値で解決する`Promise`を返す。
- * - `abortSignal`を指定していて、`abortSignal`に紐付いている`AbortController`で`abort`を呼び出した場合、返した`Promise`を拒否する。
- */
-export const executeAt = async <TFunc extends () => TReturned, TReturned>(params: {
-  readonly date: Date;
-  readonly func: TFunc;
-  readonly abortSignal?: AbortSignal | undefined;
-  readonly timerResetIntervalMs?: number | undefined;
-}): Promise<TReturned> => {
-  const { date, func, abortSignal, timerResetIntervalMs } = params;
-  const now = new Date();
-  await sleep({ timeoutMs: date.getTime() - now.getTime(), abortSignal, timerResetIntervalMs });
-  return func();
 };
 
 export type SchedulableFunction<TArgs extends unknown[], TReturned> = (
@@ -66,6 +60,13 @@ export type SchedulableFunction<TArgs extends unknown[], TReturned> = (
   abortSignal?: AbortSignal,
 ) => Promise<TReturned>;
 
+/**
+ * Returns a function that calls the specified`func` on the specified date.
+ *
+ * @param func The function to be called at the specified date.
+ * @param timerResetIntervalMs The interval in milliseconds at which the timer should be reset. If `0` or negative, it will be treated as the same value as `timeoutMs`.
+ * @returns A function that takes arguments in one `Array`, a `Date`, and an optional `AbortSignal`, and returns a promise that resolves with the result of calling `func` at the specified date.
+ */
 export const schedulableFunctionFromFunction = <
   TFunc extends (this: unknown, ...args: TArgs) => TReturned,
   TArgs extends unknown[] = Parameters<TFunc>,
@@ -78,6 +79,13 @@ export const schedulableFunctionFromFunction = <
   return schedulableFunctionFromAbortableFunction(abortableFunction, timerResetIntervalMs);
 };
 
+/**
+ * Returns a function that calls the specified`func` on the specified date.
+ *
+ * @param func The abortable function to be called at the specified date.
+ * @param timerResetIntervalMs The interval in milliseconds at which the timer should be reset. If `0` or negative, it will be treated as the same value as `timeoutMs`.
+ * @returns A function that takes arguments in one `Array`, a `Date`, and an optional `AbortSignal`, and returns a promise that resolves with the result of calling `func` at the specified date.
+ */
 export const schedulableFunctionFromAbortableFunction =
   <
     TFunc extends AbortableFunction<TArgs, TReturned>,
@@ -87,6 +95,14 @@ export const schedulableFunctionFromAbortableFunction =
     func: TFunc,
     timerResetIntervalMs?: number,
   ): SchedulableFunction<TArgs, Awaited<TReturned>> =>
+  /**
+   * Calls the specified function at the specified date.
+   *
+   * @param args The arguments to be passed to the function.
+   * @param date The date at which the function should be called.
+   * @param abortSignal An optional `AbortSignal` that can be used to abort the execution. If the function is `AbortableFunction`, it will also be passed to the function.
+   * @returns A promise that resolves with the result of calling `func` at the specified date.
+   */
   async (args, date, abortSignal): Promise<Awaited<TReturned>> => {
     await sleep({ timeoutMs: date.getTime() - Date.now(), abortSignal, timerResetIntervalMs });
     const returned = await func(args, abortSignal);

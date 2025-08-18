@@ -61,6 +61,10 @@ export type AbortableClient<
 /**
  * Returns a {@linkcode Client} function that can be used to call functions on a server.
  *
+ * `asyncify-events` allows you to call functions on a `WebWorker`, `ServiceWorker` as if they were local functions.
+ * By calling the client function, it sends a request to the *server* (e.g. `WebWorker` or `ServiceWorker`) and returns a Promise that resolves with the result of the function call.
+ * If the function on the server fails, the Promise will be rejected with the error thrown on the server.
+ *
  * ## Example (Web Worker as a Server)
  *
  * ### Web Worker side
@@ -92,6 +96,10 @@ export type AbortableClient<
  *   console.log(result); // => 3
  * });
  * ```
+ *
+ * @returns A {@linkcode Client} function that can be used to call functions on a server.
+ *
+ * @see {@linkcode startServerFromPort}
  */
 export const clientFromPort = <
   TFunc extends (this: unknown, ...args: TArgs) => TReturned,
@@ -110,6 +118,13 @@ export const clientFromPort = <
   return (...args) => underlyingAbortableClient(args);
 };
 
+/**
+ * Returns an {@linkcode AbortableClient} function that can be used to call functions on a server.
+ *
+ * If the function on the server is an {@linkcode AbortableFunction}, you can pass an `AbortSignal` when calling the client function, and stop execution on the server by dispatching `abort` event.
+ *
+ * @see {@linkcode clientFromPort} for detailed usage.
+ */
 export const abortableClientFromPort = <
   TFunc extends AbortableFunction<TArgs, TReturned>,
   TArgs extends unknown[] = Parameters<TFunc>[0],
@@ -207,38 +222,7 @@ export const abortableClientFromPort = <
 /**
  * Start a server that can be used to handle function calls from a {@linkcode Client}.
  *
- * ## Example (Web Worker as a Server)
- *
- * ### Web Worker side
- *
- * ```ts
- * import { startServerFromPort, portFromMessagePort } from '@mgn901/mgn901-utils-ts/asyncify-events';
- *
- * // define a function
- * export const add = (arg1: number, arg2: number) => arg1 + arg2;
- *
- * // setup a server
- * startServerFromPort(add, portFromMessagePort(globalThis, 'my-channel'));
- * ```
- *
- * ### Window side
- *
- * ```ts
- * import { clientFromPort, portFromMessagePort } from '@mgn901/mgn901-utils-ts/asyncify-events';
- * import type { add } from './worker.js';
- *
- * // setup a client
- * const worker = new Worker('worker.js');
- * const request = clientFromPort<typeof add>(
- *   portFromMessagePort(worker, 'my-channel')
- * );
- *
- * // call a function on the worker
- * request(1, 2).then((result) => {
- *   console.log(result); // => 3
- * });
- * ```
- *
+ * @see {@linkcode clientFromPort} for detailed usage.
  * @returns A function that can be called to stop the server.
  */
 export const startServerFromPort = <TArgs extends unknown[], TReturned>(
@@ -247,6 +231,12 @@ export const startServerFromPort = <TArgs extends unknown[], TReturned>(
 ): (() => void) =>
   startAbortableServerFromPort<TArgs, TReturned>((args: TArgs) => func(...args), port);
 
+/**
+ * Start a server that can be used to handle function calls from a {@linkcode AbortableClient}.
+ *
+ * @see {@linkcode abortableClientFromPort} and {@linkcode clientFromPort} for detailed usage.
+ * @returns A function that can be called to stop the server.
+ */
 export const startAbortableServerFromPort = <TArgs extends unknown[], TReturned>(
   func: AbortableFunction<TArgs, TReturned>,
   port: AsyncifyEventsPort,
