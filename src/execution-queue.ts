@@ -336,11 +336,11 @@ export const calculateExecutionDateFunctionFromTimeWindowRateLimitationRules =
       getOldestExecutionDateInLatestTimeWindow: async (startOfLastTimeWindow: Date) =>
         (
           await repository.getMany({
-            filters: { executedAt: ['lte', startOfLastTimeWindow] },
+            filters: { executedAt: ['gte', startOfLastTimeWindow] },
             orderBy: { executedAt: 'asc' },
             limit: 1,
           })
         )[0]?.executedAt,
       countExecutionsInLatestTimeWindow: (startOfLastTimeWindow: Date) =>
-        repository.count({ filters: { executedAt: ['lte', startOfLastTimeWindow] } }),
+        repository.count({ filters: { executedAt: ['gte', startOfLastTimeWindow] } }),
     });

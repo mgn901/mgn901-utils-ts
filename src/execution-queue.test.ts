@@ -69,11 +69,11 @@ class ExecutionRepositoryMock<
 
           params.filters?.executedAt instanceof Date === true ||
             params.filters?.executedAt?.[0] !== 'lte' ||
-            params.filters.executedAt[1] <= execution.executedAt,
+            execution.executedAt <= params.filters.executedAt[1],
 
           params.filters?.executedAt instanceof Date === true ||
             params.filters?.executedAt?.[0] !== 'gte' ||
-            execution.executedAt <= params.filters.executedAt[1],
+            params.filters.executedAt[1] <= execution.executedAt,
 
           // 文字列の他のクエリは使わないので未サポート
           typeof params.filters?.status !== 'string' || execution.status === params.filters?.status,
