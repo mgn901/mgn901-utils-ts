@@ -10,8 +10,8 @@ describe('unify-functions', () => {
   const dividedFunctions = divideFunction<typeof functions>(unifiedFunction, ['add', 'subtract']);
 
   test('unified function should call the correct function based on key', () => {
-    const addResult = unifiedFunction({ key: 'add', args: [1, 2, 3] });
-    const subtractResult = unifiedFunction({ key: 'subtract', args: [1, 2] });
+    const addResult = unifiedFunction('add', 1, 2, 3);
+    const subtractResult = unifiedFunction('subtract', 1, 2);
 
     expect(addResult).toBe(6);
     // Ensures that `add` was called with the correct parameters.

@@ -12,13 +12,13 @@ type DefaultFunctions = {
  */
 export const unifyFunctions =
   <TFuncs extends DefaultFunctions>(funcs: TFuncs): UnifiedFunction<TFuncs> =>
-  ({ key, args }) =>
+  (key, ...args) =>
     funcs[key](...args);
 
-export type UnifiedFunction<TFuncs extends DefaultFunctions> = <K extends keyof TFuncs>(params: {
-  readonly key: K;
-  readonly args: Parameters<TFuncs[K]>;
-}) => ReturnType<TFuncs[K]>;
+export type UnifiedFunction<TFuncs extends DefaultFunctions> = <K extends keyof TFuncs>(
+  key: K,
+  ...args: Parameters<TFuncs[K]>
+) => ReturnType<TFuncs[K]>;
 
 /**
  * Divides a unified function into multiple functions based on the provided keys.
@@ -29,15 +29,15 @@ export type UnifiedFunction<TFuncs extends DefaultFunctions> = <K extends keyof 
  * @returns An object where each key corresponds to a function that can be called with its specific arguments.
  */
 export const divideFunction = <TFuncs extends DefaultFunctions>(
-  unifiedFunction: <K extends keyof TFuncs>(params: {
-    readonly key: K;
-    readonly args: Parameters<TFuncs[K]>;
-  }) => ReturnType<TFuncs[K]>,
+  unifiedFunction: <K extends keyof TFuncs>(
+    key: K,
+    ...args: Parameters<TFuncs[K]>
+  ) => ReturnType<TFuncs[K]>,
   keys: readonly (keyof TFuncs)[],
 ): TFuncs =>
   Object.fromEntries(
     keys.map((key) => [
       key,
-      (...args: Parameters<TFuncs[typeof key]>) => unifiedFunction({ key, args }),
+      (...args: Parameters<TFuncs[typeof key]>) => unifiedFunction(key, ...args),
     ]),
   ) as TFuncs;
