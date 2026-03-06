@@ -1,6 +1,11 @@
+const head = Symbol('head');
+const tail = Symbol('tail');
+const comparator = Symbol('comparator');
 const getEntryByKey = Symbol('getEntryByKey');
 const getIndexAndEntryByValue = Symbol('getEntryByValue');
 const deleteEntry = Symbol('deleteEntry');
+
+const defaultComparator = (a: unknown, b: unknown) => a === b;
 
 /**
  * A Map-like ordered collection where keys are numeric indices (positions).
@@ -56,25 +61,30 @@ interface ListEntry<T> {
 export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
   // This implementation intentionally exposes only the public API; internal list
   // pointers (`head`, `tail`, `prev`, `next`) are private.
-  private head: ListEntry<T> | undefined;
-  private tail: ListEntry<T> | undefined;
+  private [head]: ListEntry<T> | undefined;
+  private [tail]: ListEntry<T> | undefined;
+  private [comparator]: (this: unknown, a: unknown, b: unknown) => boolean;
   size: number;
 
   /**
    * Find the list node for a zero-based `key` (index).
    * Traverses from the head or tail depending on which is closer.
    */
-  [getEntryByKey](key: number): ListEntry<T> | undefined {
-    if (key >= this.size || this.head === undefined || this.tail === undefined)
+  private [getEntryByKey](key: number): ListEntry<T> | undefined {
+    if (
+      key >= this.size ||
+      this[head] === undefined ||
+      this[tail] === undefined
+    )
       return undefined;
 
     if (key < this.size / 2) {
-      let entry = this.head;
+      let entry = this[head];
       // biome-ignore lint/style/noNonNullAssertion: all entries until `key` are chained
       for (let i = 1; i <= key; i++) entry = entry.next!;
       return entry;
     } else {
-      let entry = this.tail;
+      let entry = this[tail];
       // biome-ignore lint/style/noNonNullAssertion: all entries until `key` are chained
       for (let i = this.size - 2; i >= key; i--) entry = entry.prev!;
       return entry;
@@ -85,32 +95,36 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
    * Find the first list node whose `value` equals `value` and return a tuple of
    * its zero-based index and the node. Returns `undefined` if not found.
    */
-  [getIndexAndEntryByValue](value: T): [number, ListEntry<T>] | undefined {
-    let entry = this.head;
+  private [getIndexAndEntryByValue](
+    value: T,
+  ): [number, ListEntry<T>] | undefined {
+    let entry = this[head];
     let i = 0;
     while (
       entry !== undefined &&
       entry.next !== undefined &&
-      entry.value !== value
+      this[comparator](entry.value, value) === false
     ) {
       entry = entry.next;
       i++;
     }
-    return entry?.value === value ? [i, entry] : undefined;
+    return entry !== undefined && this[comparator](entry?.value, value)
+      ? [i, entry]
+      : undefined;
   }
 
   /**
    * Remove a node from the list and fix surrounding pointers. This function
    * also updates `head`/`tail` and decrements `size`.
    */
-  [deleteEntry](entry: ListEntry<T> | undefined): boolean {
+  private [deleteEntry](entry: ListEntry<T> | undefined): boolean {
     if (entry === undefined) return false;
 
     if (entry.prev) entry.prev.next = entry.next;
     if (entry.next) entry.next.prev = entry.prev;
 
-    if (entry.prev === undefined) this.head = entry.next;
-    if (entry.next === undefined) this.tail = entry.prev;
+    if (entry.prev === undefined) this[head] = entry.next;
+    if (entry.next === undefined) this[tail] = entry.prev;
 
     entry.prev = undefined;
     entry.next = undefined;
@@ -124,7 +138,10 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
    * Create a new LinkedTotalOrderedMap. If `iterable` is provided the values
    * are appended in order.
    */
-  constructor(iterable?: readonly T[] | Iterable<T> | null) {
+  constructor(
+    iterable?: readonly T[] | Iterable<T> | null,
+    compare?: (this: unknown, a: unknown, b: unknown) => boolean,
+  ) {
     this.size = 0;
     if (Array.isArray(iterable)) {
       for (let i = 0; i < iterable?.length; i++) {
@@ -135,6 +152,7 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
         this.insert(item);
       }
     }
+    this[comparator] = compare ?? defaultComparator;
   }
 
   insert(key: number, value: T): this;
@@ -156,8 +174,8 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
     if (prev) prev.next = entry;
     if (next) next.prev = entry;
 
-    if (key === 0) this.head = entry;
-    if (key === this.size) this.tail = entry;
+    if (key === 0) this[head] = entry;
+    if (key === this.size) this[tail] = entry;
 
     this.size++;
 
@@ -165,8 +183,8 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
   }
 
   clear(): void {
-    this.head = undefined;
-    this.tail = undefined;
+    this[head] = undefined;
+    this[tail] = undefined;
     this.size = 0;
   }
 
@@ -176,14 +194,14 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
   }
 
   entries(): MapIterator<[number, T]> {
-    return new LinkedTotalOrderedMapEntryIterator(this.head);
+    return new LinkedTotalOrderedMapEntryIterator(this[head]);
   }
 
   forEach(
     callbackfn: (value: T, key: number, map: Map<number, T>) => void,
     thisArg?: unknown,
   ): void {
-    const iterator = new LinkedTotalOrderedMapEntryIterator(this.head);
+    const iterator = new LinkedTotalOrderedMapEntryIterator(this[head]);
     for (const [key, value] of iterator)
       callbackfn.call(thisArg, value, key, this);
   }
@@ -197,7 +215,7 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
   }
 
   keys(): MapIterator<number> {
-    return new LinkedTotalOrderedMapKeyIterator(this.head);
+    return new LinkedTotalOrderedMapKeyIterator(this[head]);
   }
 
   /**
@@ -214,11 +232,11 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
   }
 
   values(): MapIterator<T> {
-    return new LinkedTotalOrderedMapValueIterator(this.head);
+    return new LinkedTotalOrderedMapValueIterator(this[head]);
   }
 
   [Symbol.iterator](): MapIterator<[number, T]> {
-    return new LinkedTotalOrderedMapEntryIterator(this.head);
+    return new LinkedTotalOrderedMapEntryIterator(this[head]);
   }
 
   get [Symbol.toStringTag]() {

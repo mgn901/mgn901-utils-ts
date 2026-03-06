@@ -1,9 +1,12 @@
 import { LinkedTotalOrderedMap } from './total-ordered-map';
 
+const root = Symbol('root');
+const nodes = Symbol('nodes');
 const getNode = Symbol('getNode');
 const makeNode = Symbol('makeNode');
 const deleteNode = Symbol('deleteNode');
 const rootNodeKey = Symbol('rootNodeKey');
+const emptyValue = Symbol('empty');
 
 /**
  * A Map implementation that uses tuple keys.
@@ -13,24 +16,25 @@ const rootNodeKey = Symbol('rootNodeKey');
  * treats arrays as tuples and compares them by value, so two different arrays
  * with the same contents would be considered the same key.
  */
-export class TupleKeyedMap<
-  K extends readonly unknown[],
-  V extends Exclude<unknown, undefined>,
-> implements Map<K, V>
+export class TupleKeyedMap<K extends readonly unknown[], V>
+  implements Map<K, V>
 {
-  private root = new TreeNode<K[number], V | undefined>(
+  private [root] = new TreeNode<K[number], V | typeof emptyValue>(
     undefined,
     rootNodeKey,
-    undefined,
+    emptyValue,
   );
-  private nodeToValueMap = new Map<TreeNode<K[number], V | undefined>, V>();
+  private [nodes] = new Set<TreeNode<K[number], V>>();
   size: number = 0;
 
   /**
    * Get a node for the given tuple key.
    */
-  [getNode](tupleKey: K): TreeNode<K[number], V | undefined> | undefined {
-    let node: TreeNode<K[number], V | undefined> | undefined = this.root;
+  private [getNode](
+    tupleKey: K,
+  ): TreeNode<K[number], V | typeof emptyValue> | undefined {
+    let node: TreeNode<K[number], V | typeof emptyValue> | undefined =
+      this[root];
     for (let i = 0; i < tupleKey.length && node !== undefined; i++) {
       const tupleElement = tupleKey[i];
       node = node.getChild(tupleElement);
@@ -42,12 +46,12 @@ export class TupleKeyedMap<
    * Create a new node for the given tuple key.
    * If a node already exists for the tuple key, return it.
    */
-  [makeNode](tupleKey: K): TreeNode<K[number], V | undefined> {
-    let node = this.root;
+  private [makeNode](tupleKey: K): TreeNode<K[number], V | typeof emptyValue> {
+    let node = this[root];
     for (let i = 0; i < tupleKey.length; i++) {
       const tupleElement = tupleKey[i];
       node =
-        node.getChild(tupleElement) ?? node.setChild(tupleElement, undefined);
+        node.getChild(tupleElement) ?? node.setChild(tupleElement, emptyValue);
     }
     return node;
   }
@@ -56,11 +60,11 @@ export class TupleKeyedMap<
    * Delete `node` from the tree and if its parent has no value and children,
    * prune it.
    */
-  [deleteNode](node: TreeNode<K[number], V | undefined>): void {
+  private [deleteNode](node: TreeNode<K[number], V | typeof emptyValue>): void {
     let currentNode = node;
     while (
       currentNode.parent !== undefined &&
-      currentNode.value === undefined &&
+      currentNode.value === emptyValue &&
       currentNode.childNodeCount === 0
     ) {
       const parent = currentNode.parent;
@@ -81,64 +85,67 @@ export class TupleKeyedMap<
   }
 
   clear(): void {
-    this.root = new TreeNode(undefined, rootNodeKey, undefined);
-    this.nodeToValueMap.clear();
+    this[root] = new TreeNode(undefined, rootNodeKey, emptyValue);
+    this[nodes].clear();
     this.size = 0;
   }
 
   delete(key: K): boolean {
     const node = this[getNode](key);
-    const exists = node !== undefined && node.value !== undefined;
+    const exists = node !== undefined && node.value !== emptyValue;
     if (!exists) return false;
-    node.value = undefined;
-    this.nodeToValueMap.delete(node);
+    this[nodes].delete(node as TreeNode<K[number], V>);
+    node.value = emptyValue;
     this.size--;
     this[deleteNode](node);
     return true;
   }
 
   entries(): MapIterator<[K, V]> {
-    return new TupleKeyedMapEntryIterator(this.nodeToValueMap);
+    return new TupleKeyedMapEntryIterator(this[nodes]);
   }
 
   forEach(
     callbackfn: (value: V, key: K, map: Map<K, V>) => void,
     thisArg?: unknown,
   ): void {
-    for (const [key, value] of new TupleKeyedMapEntryIterator(
-      this.nodeToValueMap,
-    ))
+    for (const [key, value] of new TupleKeyedMapEntryIterator(this[nodes]))
       callbackfn.call(thisArg, value, key, this);
   }
 
   get(key: K): V | undefined {
     const node = this[getNode](key);
-    return node?.value;
+    return node !== undefined
+      ? node.value !== emptyValue
+        ? node.value
+        : undefined
+      : undefined;
   }
 
   has(key: K): boolean {
-    return this[getNode](key)?.value !== undefined;
+    const node = this[getNode](key);
+    return node !== undefined ? node.value !== emptyValue : false;
   }
 
   keys(): MapIterator<K> {
-    return new TupleKeyedMapKeyIterator(this.nodeToValueMap);
+    return new TupleKeyedMapKeyIterator(this[nodes]);
   }
 
   set(key: K, value: V): this {
     const node = this[makeNode](key);
-    const exists = node.value !== undefined;
+    const exists = node.value !== emptyValue;
     node.value = value;
-    this.nodeToValueMap.set(node, value);
+    this[nodes].add(node as TreeNode<K[number], V>);
     if (!exists) this.size++;
     return this;
   }
 
   values(): MapIterator<V> {
-    return new TupleKeyedMapValueIterator(this.nodeToValueMap);
+    return new TupleKeyedMapValueIterator(this[nodes]);
   }
 
   [Symbol.iterator](): MapIterator<[K, V]> {
-    return new TupleKeyedMapEntryIterator(this.nodeToValueMap);
+    return new TupleKeyedMapEntryIterator(this[nodes]);
   }
 
   get [Symbol.toStringTag]() {
@@ -185,16 +192,10 @@ const leafToTuple = <K extends readonly unknown[], V>(
   return Array.from(list.values()) as unknown as K;
 };
 
-abstract class TupleKeyedMapIteratorBase<
-  K extends readonly unknown[],
-  V extends Exclude<unknown, undefined>,
-  RT,
-> {
-  protected iterator:
-    | MapIterator<[TreeNode<K[number], V | undefined>, V]>
-    | undefined;
-  constructor(nodeToValueMap: Map<TreeNode<K[number], V | undefined>, V>) {
-    this.iterator = nodeToValueMap[Symbol.iterator]();
+abstract class TupleKeyedMapIteratorBase<K extends readonly unknown[], V, RT> {
+  protected iterator: SetIterator<TreeNode<K[number], V>> | undefined;
+  constructor(nodes: Set<TreeNode<K[number], V>>) {
+    this.iterator = nodes[Symbol.iterator]();
   }
   [Symbol.iterator](): this {
     return this;
@@ -210,10 +211,7 @@ abstract class TupleKeyedMapIteratorBase<
   }
 }
 
-class TupleKeyedMapEntryIterator<
-    K extends readonly unknown[],
-    V extends Exclude<unknown, undefined>,
-  >
+class TupleKeyedMapEntryIterator<K extends readonly unknown[], V>
   extends TupleKeyedMapIteratorBase<K, V, [K, V]>
   implements MapIterator<[K, V]>
 {
@@ -222,17 +220,14 @@ class TupleKeyedMapEntryIterator<
     const result = this.iterator.next();
     if (result.done === false)
       return {
-        value: [leafToTuple(result.value[0]), result.value[1]],
+        value: [leafToTuple(result.value), result.value.value],
         done: false,
       };
     return { value: undefined, done: true };
   }
 }
 
-class TupleKeyedMapKeyIterator<
-    K extends readonly unknown[],
-    V extends Exclude<unknown, undefined>,
-  >
+class TupleKeyedMapKeyIterator<K extends readonly unknown[], V>
   extends TupleKeyedMapIteratorBase<K, V, K>
   implements MapIterator<K>
 {
@@ -240,22 +235,20 @@ class TupleKeyedMapKeyIterator<
     if (this.iterator === undefined) return { value: undefined, done: true };
     const result = this.iterator.next();
     if (result.done === false)
-      return { value: leafToTuple(result.value[0]), done: false };
+      return { value: leafToTuple(result.value), done: false };
     return { value: undefined, done: true };
   }
 }
 
-class TupleKeyedMapValueIterator<
-    K extends readonly unknown[],
-    V extends Exclude<unknown, undefined>,
-  >
+class TupleKeyedMapValueIterator<K extends readonly unknown[], V>
   extends TupleKeyedMapIteratorBase<K, V, V>
   implements MapIterator<V>
 {
   next(...[_value]: [] | [unknown]): IteratorResult<V, undefined> {
     if (this.iterator === undefined) return { value: undefined, done: true };
     const result = this.iterator.next();
-    if (result.done === false) return { value: result.value[1], done: false };
+    if (result.done === false)
+      return { value: result.value.value, done: false };
     return { value: undefined, done: true };
   }
 }
