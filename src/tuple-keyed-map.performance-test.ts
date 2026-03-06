@@ -1,9 +1,9 @@
-import { memoryUsage } from 'node:process';
+import { argv, memoryUsage } from 'node:process';
 import { TupleKeyedMap } from './tuple-keyed-map';
 
-const COUNT = 100000;
-const MAX_TUPLE_LENGTH = 10;
-const MAX_INNER_OBJ_SIZE = 10;
+const COUNT = 100_000;
+const MAX_TUPLE_LENGTH = 1;
+const MAX_INNER_OBJ_SIZE = 1;
 
 export class StringifiedTupleKeyedMap<K, V> implements Map<K, V> {
   private readonly map = new Map<string, V>();
@@ -102,7 +102,6 @@ const runMapPerformanceTest = (
   ops: number[],
 ): { time: number; heapTotal: number } => {
   const heapTotalOnStart = memoryUsage().heapTotal;
-
   const startedAt = globalThis.performance.now();
 
   for (let i = 0; i < ops.length; i++) {
@@ -123,24 +122,26 @@ const runMapPerformanceTest = (
   };
 };
 
-// NOTE: If you want to measure the memory performance, you should comment out
-// one of the tests to prevent interference from the other test's memory usage.
+if (argv[1] === import.meta.filename) {
+  // NOTE: If you want to measure the memory performance, you should comment out
+  // one of the tests to prevent interference from the other test's memory usage.
 
-const stringifiedTupleKeyedMap = new StringifiedTupleKeyedMap<
-  number[][],
-  number
->();
-const {
-  time: stringifiedTupleKeyedMapTime,
-  heapTotal: stringifiedTupleKeyedMapHeapTotal,
-} = runMapPerformanceTest(stringifiedTupleKeyedMap, entries, ops);
-console.log(
-  `StringifiedTupleKeyedMap: ${stringifiedTupleKeyedMapTime} ms, ${stringifiedTupleKeyedMapHeapTotal} B`,
-);
+  const stringifiedTupleKeyedMap = new StringifiedTupleKeyedMap<
+    number[][],
+    number
+  >();
+  const {
+    time: stringifiedTupleKeyedMapTime,
+    heapTotal: stringifiedTupleKeyedMapHeapTotal,
+  } = runMapPerformanceTest(stringifiedTupleKeyedMap, entries, ops);
+  console.log(
+    `StringifiedTupleKeyedMap: ${stringifiedTupleKeyedMapTime} ms, ${stringifiedTupleKeyedMapHeapTotal} B`,
+  );
 
-const tupleKeyedMap = new TupleKeyedMap<number[][], number>();
-const { time: tupleKeyedMapTime, heapTotal: tupleKeyedMapHeapTotal } =
-  runMapPerformanceTest(tupleKeyedMap, entries, ops);
-console.log(
-  `TupleKeyedMap: ${tupleKeyedMapTime} ms, ${tupleKeyedMapHeapTotal} B`,
-);
+  const tupleKeyedMap = new TupleKeyedMap<number[][], number>();
+  const { time: tupleKeyedMapTime, heapTotal: tupleKeyedMapHeapTotal } =
+    runMapPerformanceTest(tupleKeyedMap, entries, ops);
+  console.log(
+    `TupleKeyedMap: ${tupleKeyedMapTime} ms, ${tupleKeyedMapHeapTotal} B`,
+  );
+}

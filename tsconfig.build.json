@@ -4,6 +4,6 @@
     "./src/**/*.test.ts",
     "./src/**/*.test.tsx",
     "./src/**/*.performance-test.ts",
-    "./src/**/*.performance-test.tsx",
-  ],
+    "./src/**/*.performance-test.tsx"
+  ]
 }
