@@ -4,11 +4,19 @@ const latestVersion = Symbol('repository.latestVersion');
 
 export const repositorySymbol = { latestVersion: latestVersion } as const;
 
-export type LogicalFilter<TFilter> = AndFilter<TFilter> | OrFilter<TFilter> | NotFilter<TFilter>;
-export type AndFilter<TFilter> = ['and', ...(TFilter | LogicalFilter<TFilter>)[]];
+export type LogicalFilter<TFilter> =
+  | AndFilter<TFilter>
+  | OrFilter<TFilter>
+  | NotFilter<TFilter>;
+export type AndFilter<TFilter> = [
+  'and',
+  ...(TFilter | LogicalFilter<TFilter>)[],
+];
 export type OrFilter<TFilter> = ['or', ...(TFilter | LogicalFilter<TFilter>)[]];
 export type NotFilter<TFilter> = ['not', TFilter | LogicalFilter<TFilter>];
-export type NumberFilter<T extends number | Date> = T | ['gt' | 'lt' | 'gte' | 'lte', T];
+export type NumberFilter<T extends number | Date> =
+  | T
+  | ['gt' | 'lt' | 'gte' | 'lte', T];
 export type StringFilter<T extends string> =
   | T
   | ['gt' | 'lt' | 'gte' | 'lte', T]
@@ -19,9 +27,13 @@ export type Filters<T> =
         readonly [K in keyof FieldsOf<T>]?: NonNullable<T[K]> extends boolean
           ? T[K]
           : NonNullable<T[K]> extends number | Date
-            ? LogicalFilter<NumberFilter<NonNullable<T[K]>>> | NumberFilter<NonNullable<T[K]>>
+            ?
+                | LogicalFilter<NumberFilter<NonNullable<T[K]>>>
+                | NumberFilter<NonNullable<T[K]>>
             : NonNullable<T[K]> extends string
-              ? LogicalFilter<StringFilter<NonNullable<T[K]>>> | StringFilter<NonNullable<T[K]>>
+              ?
+                  | LogicalFilter<StringFilter<NonNullable<T[K]>>>
+                  | StringFilter<NonNullable<T[K]>>
               : never;
       },
       never
@@ -29,7 +41,9 @@ export type Filters<T> =
   | undefined;
 
 type OrderByBase<T> = {
-  readonly [K in keyof PickByValue<FieldsOf<T>, string | number | Date>]: 'asc' | 'desc';
+  readonly [K in keyof PickByValue<FieldsOf<T>, string | number | Date>]:
+    | 'asc'
+    | 'desc';
 };
 
 export type OrderBy<T> = {

@@ -1,5 +1,5 @@
 import type { NominalPrimitive } from './nominal-primitive.type';
-import { type Id, generateId } from './random-values.js';
+import { generateId, type Id } from './random-values.js';
 import { defineRouter } from './router-utils.js';
 
 const messageTypeSymbol = Symbol();
@@ -56,7 +56,10 @@ export type AbortableClient<
   TFunc extends AbortableFunction<TArgs, TReturned>,
   TArgs extends unknown[] = Parameters<TFunc>[0],
   TReturned = ReturnType<TFunc>,
-> = (args: Readonly<TArgs>, abortSignal?: AbortSignal) => Promise<Awaited<TReturned>>;
+> = (
+  args: Readonly<TArgs>,
+  abortSignal?: AbortSignal,
+) => Promise<Awaited<TReturned>>;
 
 /**
  * Returns a {@linkcode Client} function that can be used to call functions on a server.
@@ -134,7 +137,10 @@ export const abortableClientFromPort = <
 ): AbortableClient<TFunc, TArgs, TReturned> => {
   const pendingCallbacks = new Map<
     Request<TArgs>['id'],
-    [resolve: (response: Awaited<TReturned>) => void, reject: (error: unknown) => void]
+    [
+      resolve: (response: Awaited<TReturned>) => void,
+      reject: (error: unknown) => void,
+    ]
   >();
   const requestIdAbortSignalMap = new Map<Request<TArgs>['id'], AbortSignal>();
   const abortSignalRequestIdMap = new Map<AbortSignal, Request<TArgs>['id']>();
@@ -154,7 +160,11 @@ export const abortableClientFromPort = <
     }
 
     // ServerにAbortRequestを送信する。
-    port.send<AbortRequest>({ type: 'abortRequest', id, reason: event.currentTarget.reason });
+    port.send<AbortRequest>({
+      type: 'abortRequest',
+      id,
+      reason: event.currentTarget.reason,
+    });
 
     // AbortSignalとリクエストIDの紐付けを解除する。
     // AbortRequest送信後にServerがエラーを吐く可能性があるので、resolve/rejectとリクエストIDの紐付けの解除はしない。
@@ -163,7 +173,9 @@ export const abortableClientFromPort = <
   };
 
   // ServerからのすべてのResponseを処理する関数を定義する。
-  const handleAllResponses = (response: Response<Awaited<TReturned>> | ErrorResponse): void => {
+  const handleAllResponses = (
+    response: Response<Awaited<TReturned>> | ErrorResponse,
+  ): void => {
     // AbortSignalとリクエストIDの紐付けを解除する。
     const abortSignal = requestIdAbortSignalMap.get(response.id);
     if (abortSignal !== undefined) {
@@ -195,7 +207,9 @@ export const abortableClientFromPort = <
   return (args, abortSignal) => {
     // listenが解除済みの場合は再開する。
     if (unlisten === undefined) {
-      unlisten = port.listen<Response<Awaited<TReturned>> | ErrorResponse>(handleAllResponses);
+      unlisten = port.listen<Response<Awaited<TReturned>> | ErrorResponse>(
+        handleAllResponses,
+      );
     }
 
     const requestId = generateId() as Request<TArgs>['id'];
@@ -203,7 +217,9 @@ export const abortableClientFromPort = <
     // AbortSignalが指定されている場合は、abortイベントが来た際にその処理をするように設定する。
     // AbortSignalとリクエストIDの紐付けもする。
     if (abortSignal !== undefined) {
-      abortSignal.addEventListener('abort', handleAllAbortEvents, { once: true });
+      abortSignal.addEventListener('abort', handleAllAbortEvents, {
+        once: true,
+      });
       requestIdAbortSignalMap.set(requestId, abortSignal);
       abortSignalRequestIdMap.set(abortSignal, requestId);
     }
@@ -229,7 +245,10 @@ export const startServerFromPort = <TArgs extends unknown[], TReturned>(
   func: (this: unknown, ...args: TArgs) => TReturned,
   port: AsyncifyEventsPort,
 ): (() => void) =>
-  startAbortableServerFromPort<TArgs, TReturned>((args: TArgs) => func(...args), port);
+  startAbortableServerFromPort<TArgs, TReturned>(
+    (args: TArgs) => func(...args),
+    port,
+  );
 
 /**
  * Start a server that can be used to handle function calls from a {@linkcode AbortableClient}.
@@ -237,7 +256,10 @@ export const startServerFromPort = <TArgs extends unknown[], TReturned>(
  * @see {@linkcode abortableClientFromPort} and {@linkcode clientFromPort} for detailed usage.
  * @returns A function that can be called to stop the server.
  */
-export const startAbortableServerFromPort = <TArgs extends unknown[], TReturned>(
+export const startAbortableServerFromPort = <
+  TArgs extends unknown[],
+  TReturned,
+>(
   func: AbortableFunction<TArgs, TReturned>,
   port: AsyncifyEventsPort,
 ): (() => void) => {
@@ -248,9 +270,17 @@ export const startAbortableServerFromPort = <TArgs extends unknown[], TReturned>
     abortControllers.set(request.id, abortController);
     try {
       const returned = await func(request.args, abortController.signal);
-      port.send<Response<TReturned>>({ type: 'response', id: request.id, value: returned });
+      port.send<Response<TReturned>>({
+        type: 'response',
+        id: request.id,
+        value: returned,
+      });
     } catch (error: unknown) {
-      port.send<ErrorResponse>({ type: 'errorResponse', id: request.id, value: error });
+      port.send<ErrorResponse>({
+        type: 'errorResponse',
+        id: request.id,
+        value: error,
+      });
     } finally {
       abortControllers.delete(request.id);
     }
@@ -272,7 +302,10 @@ export const startAbortableServerFromPort = <TArgs extends unknown[], TReturned>
 };
 
 /** @internal */
-export type PortMessage<TBody> = { readonly channel: string; readonly body: TBody };
+export type PortMessage<TBody> = {
+  readonly channel: string;
+  readonly body: TBody;
+};
 
 export const portFromEventTarget = (params: {
   readonly me: EventTarget;
@@ -280,17 +313,29 @@ export const portFromEventTarget = (params: {
   readonly channel: string;
 }): AsyncifyEventsPort => ({
   send: <TRequest>(request: TRequest) => {
-    const detail = { body: request, channel: params.channel } satisfies PortMessage<TRequest>;
-    params.other.dispatchEvent(new CustomEvent<PortMessage<TRequest>>('message', { detail }));
+    const detail = {
+      body: request,
+      channel: params.channel,
+    } satisfies PortMessage<TRequest>;
+    params.other.dispatchEvent(
+      new CustomEvent<PortMessage<TRequest>>('message', { detail }),
+    );
   },
 
-  listen: <TResponse>(handleResponse: (this: unknown, response: TResponse) => void) => {
-    const handleMessage = (event: Event | CustomEvent<PortMessage<TResponse>>) => {
+  listen: <TResponse>(
+    handleResponse: (this: unknown, response: TResponse) => void,
+  ) => {
+    const handleMessage = (
+      event: Event | CustomEvent<PortMessage<TResponse>>,
+    ) => {
       if (
         event instanceof CustomEvent &&
-        (event as CustomEvent<PortMessage<TResponse>>).detail.channel === params.channel
+        (event as CustomEvent<PortMessage<TResponse>>).detail.channel ===
+          params.channel
       ) {
-        handleResponse((event as CustomEvent<PortMessage<TResponse>>).detail.body);
+        handleResponse(
+          (event as CustomEvent<PortMessage<TResponse>>).detail.body,
+        );
       }
     };
 
@@ -317,13 +362,19 @@ export const portFromMessagePort = (
     messagePort.postMessage(data);
   },
 
-  listen: <TResponse>(handleResponse: (this: unknown, response: TResponse) => void) => {
-    const handleMessage = (event: Event | MessageEvent<PortMessage<TResponse>>) => {
+  listen: <TResponse>(
+    handleResponse: (this: unknown, response: TResponse) => void,
+  ) => {
+    const handleMessage = (
+      event: Event | MessageEvent<PortMessage<TResponse>>,
+    ) => {
       if (
         event instanceof MessageEvent &&
         (event as MessageEvent<PortMessage<TResponse>>).data.channel === channel
       ) {
-        handleResponse((event as MessageEvent<PortMessage<TResponse>>).data.body);
+        handleResponse(
+          (event as MessageEvent<PortMessage<TResponse>>).data.body,
+        );
       }
     };
 

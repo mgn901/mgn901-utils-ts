@@ -2,7 +2,9 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { defineRouter } from './router-utils.js';
 
 describe('router-utils', () => {
-  const add = jest.fn((params: { type: 'add'; a: number; b: number }) => params.a + params.b);
+  const add = jest.fn(
+    (params: { type: 'add'; a: number; b: number }) => params.a + params.b,
+  );
   const subtract = jest.fn(
     (params: { type: 'subtract'; c: number; d: number }) => params.c - params.d,
   );

@@ -1,4 +1,11 @@
-import { afterEach, beforeAll, describe, expect, jest, test } from '@jest/globals';
+import {
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 import {
   schedulableFunctionFromAbortableFunction,
   schedulableFunctionFromFunction,
@@ -48,7 +55,10 @@ describe('timer', () => {
 
     test('sleep should reject when aborted', () => {
       const abortController = new AbortController();
-      const promise = sleep({ timeoutMs: 5000, abortSignal: abortController.signal });
+      const promise = sleep({
+        timeoutMs: 5000,
+        abortSignal: abortController.signal,
+      });
       abortController.abort('custom abort reason');
 
       expect(promise).rejects.toHaveProperty('message', 'custom abort reason');
@@ -87,7 +97,11 @@ describe('timer', () => {
       const startDate = Date.now();
       const scheduledDate = new Date(startDate + 5000);
       const abortController = new AbortController();
-      const promise = schedulableAdd([1, 2, true], scheduledDate, abortController.signal);
+      const promise = schedulableAdd(
+        [1, 2, true],
+        scheduledDate,
+        abortController.signal,
+      );
       abortController.abort('custom abort reason');
 
       expect(promise).rejects.toHaveProperty('message', 'custom abort reason');
@@ -118,7 +132,8 @@ describe('timer', () => {
         });
       },
     );
-    const schedulableAbortableAdd = schedulableFunctionFromAbortableFunction(abortableAdd);
+    const schedulableAbortableAdd =
+      schedulableFunctionFromAbortableFunction(abortableAdd);
 
     test('schedulable abortable function should resolve with result at specified date', async () => {
       const startDate = Date.now();
@@ -133,7 +148,11 @@ describe('timer', () => {
       const startDate = Date.now();
       const scheduledDate = new Date(startDate + 5000);
       const abortController = new AbortController();
-      const promise = schedulableAbortableAdd([1, 2, true], scheduledDate, abortController.signal);
+      const promise = schedulableAbortableAdd(
+        [1, 2, true],
+        scheduledDate,
+        abortController.signal,
+      );
       abortController.abort('custom abort reason');
 
       expect(promise).rejects.toHaveProperty('message', 'custom abort reason');
@@ -144,11 +163,18 @@ describe('timer', () => {
       const startDate = Date.now();
       const scheduledDate = new Date(startDate + 5000);
       const abortController = new AbortController();
-      const promise = schedulableAbortableAdd([1, 2, true], scheduledDate, abortController.signal);
+      const promise = schedulableAbortableAdd(
+        [1, 2, true],
+        scheduledDate,
+        abortController.signal,
+      );
       await jest.advanceTimersByTimeAsync(5500);
       abortController.abort('custom abort reason');
 
-      expect(promise).rejects.toHaveProperty('message', 'aborted in abortableAdd');
+      expect(promise).rejects.toHaveProperty(
+        'message',
+        'aborted in abortableAdd',
+      );
     });
   });
 });

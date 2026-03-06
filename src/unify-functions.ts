@@ -15,7 +15,9 @@ export const unifyFunctions =
   (key, ...args) =>
     funcs[key](...args);
 
-export type UnifiedFunction<TFuncs extends DefaultFunctions> = <K extends keyof TFuncs>(
+export type UnifiedFunction<TFuncs extends DefaultFunctions> = <
+  K extends keyof TFuncs,
+>(
   key: K,
   ...args: Parameters<TFuncs[K]>
 ) => ReturnType<TFuncs[K]>;
@@ -38,6 +40,7 @@ export const divideFunction = <TFuncs extends DefaultFunctions>(
   Object.fromEntries(
     keys.map((key) => [
       key,
-      (...args: Parameters<TFuncs[typeof key]>) => unifiedFunction(key, ...args),
+      (...args: Parameters<TFuncs[typeof key]>) =>
+        unifiedFunction(key, ...args),
     ]),
   ) as TFuncs;

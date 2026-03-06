@@ -20,15 +20,22 @@ describe('custom-event-utils', () => {
     eventTarget.addEventListener('add', handleAdd);
     eventTarget.addEventListener('subtract', handleSubtract);
 
-    const dispatch = dispatchFunctionFromEventTarget<CustomEventData>(eventTarget);
+    const dispatch =
+      dispatchFunctionFromEventTarget<CustomEventData>(eventTarget);
     dispatch('add', { type: 'add', a: 1, b: 2 });
     dispatch('subtract', { type: 'subtract', c: 1, d: 2 });
 
     expect(handleAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'add', detail: { type: 'add', a: 1, b: 2 } }),
+      expect.objectContaining({
+        type: 'add',
+        detail: { type: 'add', a: 1, b: 2 },
+      }),
     );
     expect(handleSubtract).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'subtract', detail: { type: 'subtract', c: 1, d: 2 } }),
+      expect.objectContaining({
+        type: 'subtract',
+        detail: { type: 'subtract', c: 1, d: 2 },
+      }),
     );
   });
 
@@ -39,21 +46,31 @@ describe('custom-event-utils', () => {
       { add: handleAdd, subtract: handleSubtract },
       eventTarget,
     );
-    eventTarget.dispatchEvent(new CustomEvent('add', { detail: { type: 'add', a: 1, b: 2 } }));
+    eventTarget.dispatchEvent(
+      new CustomEvent('add', { detail: { type: 'add', a: 1, b: 2 } }),
+    );
     eventTarget.dispatchEvent(
       new CustomEvent('subtract', { detail: { type: 'subtract', c: 1, d: 2 } }),
     );
 
     expect(handleAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'add', detail: { type: 'add', a: 1, b: 2 } }),
+      expect.objectContaining({
+        type: 'add',
+        detail: { type: 'add', a: 1, b: 2 },
+      }),
     );
     expect(handleSubtract).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'subtract', detail: { type: 'subtract', c: 1, d: 2 } }),
+      expect.objectContaining({
+        type: 'subtract',
+        detail: { type: 'subtract', c: 1, d: 2 },
+      }),
     );
 
     unsubscribe();
     eventTarget.dispatchEvent(
-      new CustomEvent<CustomEventData>('add', { detail: { type: 'add', a: 2, b: 3 } }),
+      new CustomEvent<CustomEventData>('add', {
+        detail: { type: 'add', a: 2, b: 3 },
+      }),
     );
 
     // Should not be called again after unsubscribe

@@ -1,7 +1,11 @@
 /** @internal */
 type DefaultHandlers<TTypeKey extends string> = {
-  // biome-ignore lint/suspicious/noExplicitAny: 本当は`params`の型を`unknown & ...`にしたいが、`params`の制約を拡張できなくなってしまうので、`any & ...`にする。
-  readonly [K in string]: (this: unknown, params: any & { [TK in TTypeKey]: K }) => any;
+  readonly [K in string]: (
+    this: unknown,
+    // biome-ignore lint/suspicious/noExplicitAny: 本当は`params`の型を`unknown & ...`にしたいが、`params`の制約を拡張できなくなってしまうので、`any & ...`にする。
+    params: any & { [TK in TTypeKey]: K },
+    // biome-ignore lint/suspicious/noExplicitAny: 上に同じ
+  ) => any;
 };
 
 /** @internal */
@@ -21,9 +25,10 @@ type ReturnsOfType<
   TTypeKey extends string,
 > = { [L in keyof THandlers]: ReturnType<THandlers[L]> }[K];
 
-export type Router<THandlers extends DefaultHandlers<TTypeKey>, TTypeKey extends string> = <
-  K extends keyof THandlers,
->(
+export type Router<
+  THandlers extends DefaultHandlers<TTypeKey>,
+  TTypeKey extends string,
+> = <K extends keyof THandlers>(
   params: ParamsOfType<K, THandlers, TTypeKey>,
 ) => ReturnsOfType<K, THandlers, TTypeKey>;
 

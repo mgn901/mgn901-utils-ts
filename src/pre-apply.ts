@@ -33,8 +33,11 @@ export const preApply =
  * @returns The dictionary of functions that pre-applied the `preAppliedParams` to the each function in original `functions`.
  */
 export const bulkPreApply = <
-  // biome-ignore lint/suspicious/noExplicitAny: 本当は`params`の型を`Record<string | number | symbol, unknown>`にしたいが、`params`の制約を拡張できなくなってしまうので、`any`にする。
-  TTargetInterface extends Record<string, (this: unknown, params: any) => unknown>,
+  TTargetInterface extends Record<
+    string,
+    // biome-ignore lint/suspicious/noExplicitAny: 本当は`params`の型を`Record<string | number | symbol, unknown>`にしたいが、`params`の制約を拡張できなくなってしまうので、`any`にする。
+    (this: unknown, params: any) => unknown
+  >,
   TPreAppliedParams extends Record<never, never>,
 >(
   functions: {
@@ -52,8 +55,10 @@ export const bulkPreApply = <
   Object.fromEntries(
     Object.entries(functions).map(([key, func]) => [
       key,
-      (params: Parameters<TTargetInterface[typeof key]>[0] & Partial<TPreAppliedParams>) =>
-        func({ ...preAppliedParams, ...params }),
+      (
+        params: Parameters<TTargetInterface[typeof key]>[0] &
+          Partial<TPreAppliedParams>,
+      ) => func({ ...preAppliedParams, ...params }),
     ]),
   ) as {
     [K in keyof TTargetInterface]: (

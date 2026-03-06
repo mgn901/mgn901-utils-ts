@@ -20,7 +20,10 @@ export const dedupe = <T>(
     // 前に結果に追加した値とcurrentとを比較する。
     // 等しければ何もしない。
     // 等しくなければcurrentを結果に追加する。
-    if (result.length !== 0 && compareFn(current, result[result.length - 1]) === 0) {
+    if (
+      result.length !== 0 &&
+      compareFn(current, result[result.length - 1]) === 0
+    ) {
       return result;
     }
     result.push(current);

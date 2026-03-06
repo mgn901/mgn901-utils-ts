@@ -7,7 +7,10 @@ describe('unify-functions', () => {
   const functions = { add, subtract };
 
   const unifiedFunction = unifyFunctions(functions);
-  const dividedFunctions = divideFunction<typeof functions>(unifiedFunction, ['add', 'subtract']);
+  const dividedFunctions = divideFunction<typeof functions>(unifiedFunction, [
+    'add',
+    'subtract',
+  ]);
 
   test('unified function should call the correct function based on key', () => {
     const addResult = unifiedFunction('add', 1, 2, 3);
