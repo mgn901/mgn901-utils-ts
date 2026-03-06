@@ -1,11 +1,19 @@
 import { afterEach } from 'node:test';
-import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
+import {
+  calculateExecutionDateFunctionFromTimeWindowRateLimitationRules,
   type Enqueue,
   type Execution,
   type ExecutionId,
   type ExecutionRepository,
-  calculateExecutionDateFunctionFromTimeWindowRateLimitationRules,
   executionQueueFrom,
 } from './execution-queue.js';
 import { generateId } from './random-values.js';
@@ -15,7 +23,10 @@ import {
   type OrderBy,
   repositorySymbol,
 } from './repository-utils.js';
-import { type SchedulableFunction, schedulableFunctionFromFunction } from './timer.js';
+import {
+  type SchedulableFunction,
+  schedulableFunctionFromFunction,
+} from './timer.js';
 
 class ExecutionRepositoryMock<
   TFunc extends SchedulableFunction<TArgs, TReturned>,
@@ -25,12 +36,17 @@ class ExecutionRepositoryMock<
 {
   public readonly underlyingMap = new Map<ExecutionId, Execution<TArgs>>();
 
-  public async getOneById(id: ExecutionId): Promise<FromRepository<Execution<TArgs>> | undefined> {
+  public async getOneById(
+    id: ExecutionId,
+  ): Promise<FromRepository<Execution<TArgs>> | undefined> {
     const latestVersion = this.underlyingMap.get(id);
     if (latestVersion === undefined) {
       return undefined;
     }
-    return { ...latestVersion, [repositorySymbol.latestVersion]: latestVersion };
+    return {
+      ...latestVersion,
+      [repositorySymbol.latestVersion]: latestVersion,
+    };
   }
 
   public async getMany(params: {
@@ -47,7 +63,9 @@ class ExecutionRepositoryMock<
       )
       .slice(
         params.offset ?? 0,
-        params.limit !== undefined ? (params.offset ?? 0) + params.limit : undefined,
+        params.limit !== undefined
+          ? (params.offset ?? 0) + params.limit
+          : undefined,
       )
       .map((item) => ({ ...item, [repositorySymbol.latestVersion]: item }));
   }
@@ -65,7 +83,8 @@ class ExecutionRepositoryMock<
       .filter(([_, execution]) => {
         const conditions = [
           params.filters?.executedAt instanceof Date === false ||
-            execution.executedAt.getTime() === params.filters.executedAt.getTime(),
+            execution.executedAt.getTime() ===
+              params.filters.executedAt.getTime(),
 
           params.filters?.executedAt instanceof Date === true ||
             params.filters?.executedAt?.[0] !== 'lte' ||
@@ -76,7 +95,8 @@ class ExecutionRepositoryMock<
             params.filters.executedAt[1] <= execution.executedAt,
 
           // 文字列の他のクエリは使わないので未サポート
-          typeof params.filters?.status !== 'string' || execution.status === params.filters?.status,
+          typeof params.filters?.status !== 'string' ||
+            execution.status === params.filters?.status,
         ];
 
         return !conditions.some((condition) => condition === false);
@@ -119,15 +139,20 @@ describe('execution-queue', () => {
       return actualExecutedDate;
     };
     const schedulableFunction = schedulableFunctionFromFunction(func);
-    const executionRepository = new ExecutionRepositoryMock<SchedulableFunction<[number], Date>>();
-    let executionQueue: Awaited<ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>>;
+    const executionRepository = new ExecutionRepositoryMock<
+      SchedulableFunction<[number], Date>
+    >();
+    let executionQueue: Awaited<
+      ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>
+    >;
 
     beforeAll(async () => {
       executionQueue = await executionQueueFrom({
         schedulableFunction,
-        calculateExecutionDate: calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
-          timeWindowRateLimitationRules,
-        ),
+        calculateExecutionDate:
+          calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
+            timeWindowRateLimitationRules,
+          ),
         executionQueueEventTarget: new EventTarget(),
         executionRepository,
       });
@@ -146,30 +171,40 @@ describe('execution-queue', () => {
       });
 
       for (const rule of timeWindowRateLimitationRules) {
-        for (let i = 0; i < executions.length - rule.executionCountPerTimeWindow; i += 1) {
+        for (
+          let i = 0;
+          i < executions.length - rule.executionCountPerTimeWindow;
+          i += 1
+        ) {
           const { executedAt: firstExecutionDate } = executions[i];
           const { executedAt: lastExecutionDate } =
             executions[i + rule.executionCountPerTimeWindow];
 
-          expect(lastExecutionDate.getTime() - firstExecutionDate.getTime()).toBeGreaterThanOrEqual(
-            rule.timeWindowMs,
-          );
+          expect(
+            lastExecutionDate.getTime() - firstExecutionDate.getTime(),
+          ).toBeGreaterThanOrEqual(rule.timeWindowMs);
         }
       }
     });
 
     test('enqueued executions should be executed on time', async () => {
-      [...expectedExecutionDateMap.entries()].map(([id, expectedExecutionDate]) => {
-        const actualExecutionDate = actualExecutionDateMap.get(id);
-        expect(actualExecutionDate?.getTime()).toBeDefined();
-        if (actualExecutionDate?.getTime() === undefined) {
-          throw Error(`Execution date for ID ${id} is undefined`);
-        }
-        expect(
-          Math.abs(actualExecutionDate?.getTime() - expectedExecutionDate.getTime()),
-        ).toBeLessThanOrEqual(1);
-      });
-      expect(await executionRepository.count({ filters: { status: 'completed' } })).toBe(100);
+      [...expectedExecutionDateMap.entries()].forEach(
+        ([id, expectedExecutionDate]) => {
+          const actualExecutionDate = actualExecutionDateMap.get(id);
+          expect(actualExecutionDate?.getTime()).toBeDefined();
+          if (actualExecutionDate?.getTime() === undefined) {
+            throw Error(`Execution date for ID ${id} is undefined`);
+          }
+          expect(
+            Math.abs(
+              actualExecutionDate?.getTime() - expectedExecutionDate.getTime(),
+            ),
+          ).toBeLessThanOrEqual(1);
+        },
+      );
+      expect(
+        await executionRepository.count({ filters: { status: 'completed' } }),
+      ).toBe(100);
     });
   });
 
@@ -181,14 +216,17 @@ describe('execution-queue', () => {
     });
     const schedulableFunction = schedulableFunctionFromFunction(func);
     const executionQueueEventTarget = new EventTarget();
-    let executionQueue: Awaited<ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>>;
+    let executionQueue: Awaited<
+      ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>
+    >;
 
     beforeAll(async () => {
       executionQueue = await executionQueueFrom<typeof schedulableFunction>({
         schedulableFunction,
-        calculateExecutionDate: calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
-          timeWindowRateLimitationRules,
-        ),
+        calculateExecutionDate:
+          calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
+            timeWindowRateLimitationRules,
+          ),
         executionQueueEventTarget,
         executionRepository: new ExecutionRepositoryMock(),
       });
@@ -224,7 +262,9 @@ describe('execution-queue', () => {
       }),
     );
     const executionQueueEventTarget = new EventTarget();
-    let executionQueue: Awaited<ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>>;
+    let executionQueue: Awaited<
+      ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>
+    >;
     const startedHandler = jest.fn();
     const completedHandler = jest.fn();
     const failedHandler = jest.fn();
@@ -234,15 +274,19 @@ describe('execution-queue', () => {
       executionQueueEventTarget.addEventListener('started', startedHandler);
       executionQueueEventTarget.addEventListener('completed', completedHandler);
       executionQueueEventTarget.addEventListener('failed', failedHandler);
-      executionQueueEventTarget.addEventListener('scheduleUpdated', scheduleUpdatedHandler);
+      executionQueueEventTarget.addEventListener(
+        'scheduleUpdated',
+        scheduleUpdatedHandler,
+      );
     });
 
     beforeEach(async () => {
       executionQueue = await executionQueueFrom({
         schedulableFunction: schedulableFunction,
-        calculateExecutionDate: calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
-          timeWindowRateLimitationRules,
-        ),
+        calculateExecutionDate:
+          calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
+            timeWindowRateLimitationRules,
+          ),
         executionQueueEventTarget,
         executionRepository: new ExecutionRepositoryMock(),
       });
@@ -302,7 +346,9 @@ describe('execution-queue', () => {
     });
 
     test('queue should dispatch ExecutionQueuescheduleUpdatedEvent', async () => {
-      const executionRepository = new ExecutionRepositoryMock<typeof schedulableFunction>();
+      const executionRepository = new ExecutionRepositoryMock<
+        typeof schedulableFunction
+      >();
       const executionId = generateId() as ExecutionId;
       const executedAt = new Date();
       executionRepository.createOne({
@@ -313,14 +359,17 @@ describe('execution-queue', () => {
       });
       await jest.advanceTimersByTimeAsync(10000);
 
-      const executionQueueWithDelayedInitialization = await executionQueueFrom({
-        schedulableFunction: schedulableFunction,
-        calculateExecutionDate: calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
-          timeWindowRateLimitationRules,
-        ),
-        executionQueueEventTarget,
-        executionRepository,
-      });
+      const _executionQueueWithDelayedInitialization = await executionQueueFrom(
+        {
+          schedulableFunction: schedulableFunction,
+          calculateExecutionDate:
+            calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
+              timeWindowRateLimitationRules,
+            ),
+          executionQueueEventTarget,
+          executionRepository,
+        },
+      );
 
       expect(scheduleUpdatedHandler).toHaveBeenCalledTimes(1);
       expect(scheduleUpdatedHandler).toHaveBeenCalledWith(
@@ -343,9 +392,15 @@ describe('execution-queue', () => {
 
     afterAll(() => {
       executionQueueEventTarget.removeEventListener('started', startedHandler);
-      executionQueueEventTarget.removeEventListener('completed', completedHandler);
+      executionQueueEventTarget.removeEventListener(
+        'completed',
+        completedHandler,
+      );
       executionQueueEventTarget.removeEventListener('failed', failedHandler);
-      executionQueueEventTarget.removeEventListener('scheduleUpdated', scheduleUpdatedHandler);
+      executionQueueEventTarget.removeEventListener(
+        'scheduleUpdated',
+        scheduleUpdatedHandler,
+      );
     });
   });
 
@@ -362,15 +417,20 @@ describe('execution-queue', () => {
           }, 1000);
         }),
     );
-    let executionQueue: Awaited<ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>>;
-    const executionRepository = new ExecutionRepositoryMock<typeof schedulableFunction>();
+    let executionQueue: Awaited<
+      ReturnType<typeof executionQueueFrom<typeof schedulableFunction>>
+    >;
+    const executionRepository = new ExecutionRepositoryMock<
+      typeof schedulableFunction
+    >();
 
     beforeEach(async () => {
       executionQueue = await executionQueueFrom<typeof schedulableFunction>({
         schedulableFunction,
-        calculateExecutionDate: calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
-          timeWindowRateLimitationRules,
-        ),
+        calculateExecutionDate:
+          calculateExecutionDateFunctionFromTimeWindowRateLimitationRules(
+            timeWindowRateLimitationRules,
+          ),
         executionQueueEventTarget: new EventTarget(),
         executionRepository,
       });
@@ -389,14 +449,16 @@ describe('execution-queue', () => {
       const { executionId } = await executionQueue.enqueue(1, false);
 
       await jest.advanceTimersByTimeAsync(500);
-      const executionRunning = await executionRepository.getOneById(executionId);
+      const executionRunning =
+        await executionRepository.getOneById(executionId);
 
       expect(executionRunning).toBeDefined();
       expect(executionRunning?.args).toEqual([1, false]);
       expect(executionRunning?.status).toBe('running');
 
       await jest.advanceTimersByTimeAsync(1000);
-      const executionCompleted = await executionRepository.getOneById(executionId);
+      const executionCompleted =
+        await executionRepository.getOneById(executionId);
 
       expect(executionCompleted).toBeDefined();
       expect(executionCompleted?.args).toEqual([1, false]);

@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, describe, expect, jest, test } from '@jest/globals';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 import {
   abortableClientFromPort,
   clientFromPort,
@@ -23,7 +31,9 @@ const abortableAddAsync = jest.fn(
         clearTimeout(timeout);
         reject(
           new Error(
-            event?.currentTarget instanceof AbortSignal ? event.currentTarget.reason : 'Aborted',
+            event?.currentTarget instanceof AbortSignal
+              ? event.currentTarget.reason
+              : 'Aborted',
           ),
         );
       };
@@ -39,7 +49,7 @@ const abortableAddAsync = jest.fn(
 
 const rejectAsync = jest.fn(
   () =>
-    new Promise<number>((resolve, reject) => {
+    new Promise<number>((_resolve, reject) => {
       setTimeout(() => {
         reject(new Error('Error'));
       }, 1000);
@@ -47,13 +57,15 @@ const rejectAsync = jest.fn(
 );
 
 const abortableRejectAsync = jest.fn(
-  (args: [], abortSignal?: AbortSignal) =>
-    new Promise<number>((resolve, reject) => {
+  (_args: [], abortSignal?: AbortSignal) =>
+    new Promise<number>((_resolve, reject) => {
       const handleAbort = (event: Event) => {
         clearTimeout(timeout);
         reject(
           new Error(
-            event?.currentTarget instanceof AbortSignal ? event.currentTarget.reason : 'Aborted',
+            event?.currentTarget instanceof AbortSignal
+              ? event.currentTarget.reason
+              : 'Aborted',
           ),
         );
       };
@@ -67,7 +79,7 @@ const abortableRejectAsync = jest.fn(
     }),
 );
 
-const add = jest.fn((args: [number, number], abortSignal?: AbortSignal) => {
+const add = jest.fn((args: [number, number], _abortSignal?: AbortSignal) => {
   return args[0] + args[1];
 });
 
@@ -144,7 +156,7 @@ describe('asyncify-events', () => {
       const resultPromise = request([1, 2], abortController.signal);
       abortController.abort('Custom abort reason');
 
-      expect(resultPromise).rejects.toThrowError('Custom abort reason');
+      expect(resultPromise).rejects.toThrow('Custom abort reason');
     });
 
     test('client should handle multiple abortSignal from the user', () => {
@@ -162,7 +174,10 @@ describe('asyncify-events', () => {
         results.forEach((result, i) => {
           if (i % 2 === 0 && result.status === 'rejected') {
             expect(result.reason).toBeInstanceOf(Error);
-            expect(result.reason).toHaveProperty('message', 'Custom abort reason');
+            expect(result.reason).toHaveProperty(
+              'message',
+              'Custom abort reason',
+            );
           } else if (i % 2 === 1 && result.status === 'fulfilled') {
             expect(result.value).toBe(i + (i + 1));
           } else {
@@ -191,7 +206,7 @@ describe('asyncify-events', () => {
     );
 
     test('client should receive an error when an error thrown on the server', async () => {
-      expect(request()).rejects.toThrowError('Error');
+      expect(request()).rejects.toThrow('Error');
     });
 
     afterAll(() => {
@@ -211,7 +226,7 @@ describe('asyncify-events', () => {
     );
 
     test('client should receive an error when an error thrown on the server', async () => {
-      expect(request([])).rejects.toThrowError('Error');
+      expect(request([])).rejects.toThrow('Error');
     });
 
     afterAll(() => {
@@ -222,7 +237,11 @@ describe('asyncify-events', () => {
   describe('AbortableClient: lifecycle management', () => {
     const st = new EventTarget();
     const ct = new EventTarget();
-    const clientPort = portFromEventTarget({ me: ct, other: st, channel: 'my-channel' });
+    const clientPort = portFromEventTarget({
+      me: ct,
+      other: st,
+      channel: 'my-channel',
+    });
     const stopServer = startAbortableServerFromPort(
       add,
       portFromEventTarget({ me: st, other: ct, channel: 'my-channel' }),
@@ -234,13 +253,13 @@ describe('asyncify-events', () => {
 
       const result1 = await request([1, 2]);
       expect(result1).toBe(3);
-      expect(clientPort.listen).toBeCalledTimes(1);
+      expect(clientPort.listen).toHaveBeenCalledTimes(1);
 
       // この時点で1回目のリクエストに対するレスポンスは処理済みなので、待機中のレスポンスが無くなり、レスポンスをlistenする必要はなくなる。
       // 2回目のリクエストを送信すると、再度レスポンスをlistenする必要が生じるので、clientPort.listenが再度呼び出される。
       const result2 = await request([1, 2]);
       expect(result2).toBe(3);
-      expect(clientPort.listen).toBeCalledTimes(2);
+      expect(clientPort.listen).toHaveBeenCalledTimes(2);
     });
 
     test('abort event handler should be removed after the request is resolved', async () => {
@@ -248,8 +267,10 @@ describe('asyncify-events', () => {
       jest.spyOn(abortController.signal, 'addEventListener');
       jest.spyOn(abortController.signal, 'removeEventListener');
       await request([1, 2], abortController.signal);
-      expect(abortController.signal.addEventListener).toBeCalledTimes(1);
-      expect(abortController.signal.removeEventListener).toBeCalledTimes(1);
+      expect(abortController.signal.addEventListener).toHaveBeenCalledTimes(1);
+      expect(abortController.signal.removeEventListener).toHaveBeenCalledTimes(
+        1,
+      );
     });
 
     afterAll(() => {

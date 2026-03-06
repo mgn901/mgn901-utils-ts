@@ -3,12 +3,12 @@ import {
   subscribeHandlersToEventTarget,
 } from './custom-event-utils.js';
 import type { NominalPrimitive } from './nominal-primitive.type.js';
-import { type Id, generateId } from './random-values.js';
+import { generateId, type Id } from './random-values.js';
 import type { Filters, FromRepository, OrderBy } from './repository-utils.js';
 import { createState } from './state.js';
 import {
-  type TimeWindowRateLimitationRule,
   calculateNextExecutionDate,
+  type TimeWindowRateLimitationRule,
 } from './time-window-rate-limitation.js';
 import type { SchedulableFunction } from './timer.js';
 
@@ -25,7 +25,10 @@ export type Execution<TArgs extends unknown[]> = {
 export type Enqueue<TArgs extends unknown[]> = (
   ...args: TArgs
 ) => Promise<{ readonly executionId: ExecutionId; readonly executedAt: Date }>;
-export type Cancel = (executionId: ExecutionId, reason?: unknown) => Promise<void>;
+export type Cancel = (
+  executionId: ExecutionId,
+  reason?: unknown,
+) => Promise<void>;
 
 export type CalculateExecutionDate = (
   this: unknown,
@@ -85,29 +88,46 @@ export type ExecutionQueueFailedEventData<
   readonly args: TArgs;
   readonly value: unknown;
 };
-export type ExecutionQueueErrorEventData = { readonly type: 'error'; readonly error: unknown };
+export type ExecutionQueueErrorEventData = {
+  readonly type: 'error';
+  readonly error: unknown;
+};
 
 export type ExecutionRepository<
   TFunc extends SchedulableFunction<TArgs, TReturned>,
   TArgs extends unknown[] = Parameters<TFunc>[0],
   TReturned = Awaited<ReturnType<TFunc>>,
 > = {
-  getOneById(this: unknown, id: ExecutionId): Promise<FromRepository<Execution<TArgs>> | undefined>;
+  getOneById(
+    this: unknown,
+    id: ExecutionId,
+  ): Promise<FromRepository<Execution<TArgs>> | undefined>;
   getMany(
     this: unknown,
     params: {
-      readonly filters?: Filters<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
-      readonly orderBy: OrderBy<Pick<Execution<TArgs>, 'executedAt' | 'status'>>;
+      readonly filters?: Filters<
+        Pick<Execution<TArgs>, 'executedAt' | 'status'>
+      >;
+      readonly orderBy: OrderBy<
+        Pick<Execution<TArgs>, 'executedAt' | 'status'>
+      >;
       readonly offset?: number | undefined;
       readonly limit?: number | undefined;
     },
   ): Promise<readonly FromRepository<Execution<TArgs>>[] | readonly []>;
   count(
     this: unknown,
-    params: { readonly filters?: Filters<Pick<Execution<TArgs>, 'executedAt' | 'status'>> },
+    params: {
+      readonly filters?: Filters<
+        Pick<Execution<TArgs>, 'executedAt' | 'status'>
+      >;
+    },
   ): Promise<number>;
   createOne(this: unknown, execution: Execution<TArgs>): Promise<void>;
-  updateOne(this: unknown, execution: FromRepository<Execution<TArgs>>): Promise<void>;
+  updateOne(
+    this: unknown,
+    execution: FromRepository<Execution<TArgs>>,
+  ): Promise<void>;
   deleteOneById(this: unknown, executionId: ExecutionId): Promise<void>;
 };
 
@@ -174,14 +194,19 @@ export const executionQueueFrom = async <
     ExecutionQueueEventData<TFunc, TArgs, TReturned>
   >(params.executionQueueEventTarget);
   const dispatchControlEvent =
-    dispatchFunctionFromEventTarget<ControlEventData<TArgs>>(controlEventTarget);
+    dispatchFunctionFromEventTarget<ControlEventData<TArgs>>(
+      controlEventTarget,
+    );
 
   const handleRun = async (event: CustomEvent<ControlRunEventData<TArgs>>) => {
     const { execution, abortController } = event.detail;
 
     try {
       // 取り出した実行待ちの状態をrepository内でrunningに更新する。
-      await params.executionRepository.updateOne({ ...execution, status: 'running' });
+      await params.executionRepository.updateOne({
+        ...execution,
+        status: 'running',
+      });
 
       try {
         // 実行開始イベントを発火する。
@@ -192,7 +217,9 @@ export const executionQueueFrom = async <
         });
 
         // 取り出した実行待ちを実行する。
-        const executionDate = new Date(Math.max(execution.executedAt.getTime(), Date.now()));
+        const executionDate = new Date(
+          Math.max(execution.executedAt.getTime(), Date.now()),
+        );
         const returned = await params.schedulableFunction(
           execution.args,
           executionDate,
@@ -216,13 +243,19 @@ export const executionQueueFrom = async <
         });
 
         // repositoryを更新する。
-        await params.executionRepository.updateOne({ ...execution, status: 'failed' });
+        await params.executionRepository.updateOne({
+          ...execution,
+          status: 'failed',
+        });
 
         return;
       }
 
       // repositoryを更新する。
-      await params.executionRepository.updateOne({ ...execution, status: 'completed' });
+      await params.executionRepository.updateOne({
+        ...execution,
+        status: 'completed',
+      });
     } catch (error: unknown) {
       // repositoryの更新でエラーが発生した場合は、エラーイベントを発火する。
       dispatchExecutionQueueEvent('error', { type: 'error', error });
@@ -252,8 +285,16 @@ export const executionQueueFrom = async <
       }
 
       const abortController = new AbortController();
-      queueState.set({ status: 'running', execution: nextExecution, abortController });
-      dispatchControlEvent('run', { type: 'run', execution: nextExecution, abortController });
+      queueState.set({
+        status: 'running',
+        execution: nextExecution,
+        abortController,
+      });
+      dispatchControlEvent('run', {
+        type: 'run',
+        execution: nextExecution,
+        abortController,
+      });
     } catch (error: unknown) {
       // repositoryなどでエラーが発生した場合は、エラーイベントを発火する。
       dispatchExecutionQueueEvent('error', { type: 'error', error });
@@ -264,7 +305,9 @@ export const executionQueueFrom = async <
   };
   const subscribeIfNeeded = () => {
     if (unsubscribeControlEventHandlers === undefined) {
-      unsubscribeControlEventHandlers = subscribeHandlersToEventTarget<ControlEventData<TArgs>>(
+      unsubscribeControlEventHandlers = subscribeHandlersToEventTarget<
+        ControlEventData<TArgs>
+      >(
         { run: handleRun, pop: handlePop, suspend: handleSuspend },
         controlEventTarget,
       );
@@ -272,14 +315,21 @@ export const executionQueueFrom = async <
   };
 
   //#region 初期化
-  const waitingExecutionsBeforeStart = await params.executionRepository.getMany({
-    filters: { status: 'pending' },
-    orderBy: { executedAt: 'asc' },
-  });
+  const waitingExecutionsBeforeStart = await params.executionRepository.getMany(
+    {
+      filters: { status: 'pending' },
+      orderBy: { executedAt: 'asc' },
+    },
+  );
   if (waitingExecutionsBeforeStart.length > 0) {
     for (const execution of waitingExecutionsBeforeStart) {
-      const newExecutedAt = await params.calculateExecutionDate(params.executionRepository);
-      await params.executionRepository.updateOne({ ...execution, executedAt: newExecutedAt });
+      const newExecutedAt = await params.calculateExecutionDate(
+        params.executionRepository,
+      );
+      await params.executionRepository.updateOne({
+        ...execution,
+        executedAt: newExecutedAt,
+      });
       dispatchExecutionQueueEvent('scheduleUpdated', {
         type: 'scheduleUpdated',
         executionId: execution.id,
@@ -298,7 +348,9 @@ export const executionQueueFrom = async <
       const execution = {
         id: generateId() as ExecutionId,
         args,
-        executedAt: await params.calculateExecutionDate(params.executionRepository),
+        executedAt: await params.calculateExecutionDate(
+          params.executionRepository,
+        ),
         status: 'pending',
       } satisfies Execution<TArgs>;
       await params.executionRepository.createOne(execution);
@@ -309,7 +361,10 @@ export const executionQueueFrom = async <
 
     cancel: async (executionId, reason) => {
       const queueStateValue = queueState.get();
-      if (queueStateValue.status === 'running' && queueStateValue?.execution.id === executionId) {
+      if (
+        queueStateValue.status === 'running' &&
+        queueStateValue?.execution.id === executionId
+      ) {
         queueStateValue.abortController.abort(reason);
       } else {
         await params.executionRepository.deleteOneById(executionId);
@@ -331,9 +386,15 @@ export const calculateExecutionDateFunctionFromTimeWindowRateLimitationRules =
     calculateNextExecutionDate({
       timeWindowRateLimitationRules: rules,
       getNewestExecutionDateInLatestTimeWindow: async () =>
-        (await repository.getMany({ orderBy: { executedAt: 'desc' }, limit: 1 }))[0]?.executedAt ??
-        new Date(),
-      getOldestExecutionDateInLatestTimeWindow: async (startOfLastTimeWindow: Date) =>
+        (
+          await repository.getMany({
+            orderBy: { executedAt: 'desc' },
+            limit: 1,
+          })
+        )[0]?.executedAt ?? new Date(),
+      getOldestExecutionDateInLatestTimeWindow: async (
+        startOfLastTimeWindow: Date,
+      ) =>
         (
           await repository.getMany({
             filters: { executedAt: ['gte', startOfLastTimeWindow] },
@@ -342,5 +403,7 @@ export const calculateExecutionDateFunctionFromTimeWindowRateLimitationRules =
           })
         )[0]?.executedAt,
       countExecutionsInLatestTimeWindow: (startOfLastTimeWindow: Date) =>
-        repository.count({ filters: { executedAt: ['gte', startOfLastTimeWindow] } }),
+        repository.count({
+          filters: { executedAt: ['gte', startOfLastTimeWindow] },
+        }),
     });

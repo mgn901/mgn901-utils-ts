@@ -15,15 +15,18 @@ export const sleep = (params: {
   const { timeoutMs, abortSignal, timerResetIntervalMs } = params;
   const endDate = new Date(Date.now() + Math.max(timeoutMs, 0));
   const usedTimerResetIntervalMs = (() => {
-    const nonUndefinedInterval = timerResetIntervalMs ?? DEFAULT_TIMER_RESET_INTERVAL_MS;
-    const positiveInterval = nonUndefinedInterval <= 0 ? timeoutMs : nonUndefinedInterval;
+    const nonUndefinedInterval =
+      timerResetIntervalMs ?? DEFAULT_TIMER_RESET_INTERVAL_MS;
+    const positiveInterval =
+      nonUndefinedInterval <= 0 ? timeoutMs : nonUndefinedInterval;
     const subtractedInterval =
-      timeoutMs % positiveInterval === 0 ? positiveInterval - 1 : positiveInterval;
+      timeoutMs % positiveInterval === 0
+        ? positiveInterval - 1
+        : positiveInterval;
     return Math.max(subtractedInterval, 0);
   })();
 
   return new Promise((resolve, reject) => {
-    // biome-ignore lint/style/useConst: `timeoutId`の代入よりも先に`onAbort`などで参照するため
     let periodicResetInterval: number | NodeJS.Timeout;
     let endDateTimeout: number | NodeJS.Timeout;
 
@@ -41,7 +44,10 @@ export const sleep = (params: {
     };
 
     // 実行予定時刻に向けてタイマーをセットする。
-    endDateTimeout = setTimeout(onEndDate, Math.max(endDate.getTime() - Date.now(), 0));
+    endDateTimeout = setTimeout(
+      onEndDate,
+      Math.max(endDate.getTime() - Date.now(), 0),
+    );
 
     // そのタイマーを`timerResetIntervalMs`ミリ秒ごとにリセットする。
     periodicResetInterval = setInterval(() => {
@@ -49,7 +55,10 @@ export const sleep = (params: {
         clearTimeout(endDateTimeout);
       }
 
-      endDateTimeout = setTimeout(onEndDate, Math.max(endDate.getTime() - Date.now(), 0));
+      endDateTimeout = setTimeout(
+        onEndDate,
+        Math.max(endDate.getTime() - Date.now(), 0),
+      );
     }, usedTimerResetIntervalMs);
   });
 };
@@ -76,7 +85,10 @@ export const schedulableFunctionFromFunction = <
   timerResetIntervalMs?: number,
 ): SchedulableFunction<TArgs, Awaited<TReturned>> => {
   const abortableFunction = (args: TArgs) => func(...args);
-  return schedulableFunctionFromAbortableFunction(abortableFunction, timerResetIntervalMs);
+  return schedulableFunctionFromAbortableFunction(
+    abortableFunction,
+    timerResetIntervalMs,
+  );
 };
 
 /**
@@ -104,7 +116,11 @@ export const schedulableFunctionFromAbortableFunction =
    * @returns A promise that resolves with the result of calling `func` at the specified date.
    */
   async (args, date, abortSignal): Promise<Awaited<TReturned>> => {
-    await sleep({ timeoutMs: date.getTime() - Date.now(), abortSignal, timerResetIntervalMs });
+    await sleep({
+      timeoutMs: date.getTime() - Date.now(),
+      abortSignal,
+      timerResetIntervalMs,
+    });
     const returned = await func(args, abortSignal);
     return returned;
   };

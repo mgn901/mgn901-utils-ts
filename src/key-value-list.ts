@@ -1,7 +1,10 @@
 /**
  * Ordered Key-value store
  */
-class KeyValueList<TObject extends object, FieldNameID extends keyof TObject> extends EventTarget {
+class KeyValueList<
+  TObject extends object,
+  FieldNameID extends keyof TObject,
+> extends EventTarget {
   private _list: TObject[] = [];
   private fieldNameID: FieldNameID;
 
