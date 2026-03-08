@@ -58,7 +58,7 @@ export class LruCacheStrategy<K, V> implements CacheStrategy<K, V> {
   }
 }
 
-const compareTuple = (a: unknown, b: unknown): boolean => {
+export const compareTuple = (a: unknown, b: unknown): boolean => {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
     return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
@@ -84,7 +84,7 @@ const calculateKeyFactory = <A extends unknown[]>(
 const strategy = Symbol('strategy');
 const baseMap = Symbol('baseMap');
 
-class WithCacheStrategy<K, V> implements Map<K, V> {
+export class WithCacheStrategy<K, V> implements Map<K, V> {
   private readonly [strategy]: CacheStrategy<K, V>;
   private readonly [baseMap]: Map<K, V>;
 
