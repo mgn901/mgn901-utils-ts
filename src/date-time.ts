@@ -1,4 +1,4 @@
-import type { NominalPrimitive } from './nominal-primitive.type';
+import type { NominalPrimitive } from './nominal-primitive.type.js';
 
 const unixTimeTypeSymbol = Symbol('UnixTime');
 

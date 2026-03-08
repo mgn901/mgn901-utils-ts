@@ -1,5 +1,5 @@
 import { describe, expect, jest, test } from '@jest/globals';
-import { cachedFunctionFrom, LruCacheStrategy } from './cached-function';
+import { cachedFunctionFrom, LruCacheStrategy } from './cached-function.js';
 
 const func = (a: number): number => {
   return a ** a;

@@ -1,4 +1,4 @@
-import { LinkedTotalOrderedMap } from './total-ordered-map';
+import { LinkedTotalOrderedMap } from './total-ordered-map.js';
 
 const root = Symbol('root');
 const nodes = Symbol('nodes');

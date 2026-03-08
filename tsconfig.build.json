@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.json",
   "exclude": [
+    "./*.config.js",
+    "./*.config.cjs",
     "./src/**/*.test.ts",
     "./src/**/*.test.tsx",
     "./src/**/*.performance-test.ts",

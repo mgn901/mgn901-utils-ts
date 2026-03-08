@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
-import { TupleKeyedMap } from './tuple-keyed-map';
-import { StringifiedTupleKeyedMap } from './tuple-keyed-map.performance-test';
+import { TupleKeyedMap } from './tuple-keyed-map.js';
+import { StringifiedTupleKeyedMap } from './tuple-keyed-map.performance-test.js';
 
 describe('TupleKeyedMap', () => {
   test('set() with new key should inserts new entry', () => {
