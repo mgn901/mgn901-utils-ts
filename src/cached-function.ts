@@ -1,8 +1,8 @@
 import {
   LinkedTotalOrderedMap,
   type TotalOrderedMap,
-} from './total-ordered-map';
-import { TupleKeyedMap } from './tuple-keyed-map';
+} from './total-ordered-map.js';
+import { TupleKeyedMap } from './tuple-keyed-map.js';
 
 export const cachedFunctionFrom = <A extends unknown[], R>(
   func: (this: unknown, ...args: A) => R,
@@ -81,54 +81,57 @@ const calculateKeyFactory = <A extends unknown[]>(
   };
 };
 
-class WithCacheStrategy<K, V> implements Map<K, V> {
-  private readonly strategy: CacheStrategy<K, V>;
-  private readonly baseMap: Map<K, V>;
+const strategy = Symbol('strategy');
+const baseMap = Symbol('baseMap');
 
-  constructor(baseMap: Map<K, V>, strategy: CacheStrategy<K, V>) {
-    this.strategy = strategy;
-    this.baseMap = baseMap;
+class WithCacheStrategy<K, V> implements Map<K, V> {
+  private readonly [strategy]: CacheStrategy<K, V>;
+  private readonly [baseMap]: Map<K, V>;
+
+  constructor(map: Map<K, V>, cacheStrategy: CacheStrategy<K, V>) {
+    this[strategy] = cacheStrategy;
+    this[baseMap] = map;
   }
   clear(): void {
-    this.strategy.clear();
-    this.baseMap.clear();
+    this[strategy].clear();
+    this[baseMap].clear();
   }
   delete(key: K): boolean {
-    this.strategy.delete(key);
-    return this.baseMap.delete(key);
+    this[strategy].delete(key);
+    return this[baseMap].delete(key);
   }
   forEach(
     callbackfn: (value: V, key: K, map: Map<K, V>) => void,
     thisArg?: unknown,
   ): void {
-    this.baseMap.forEach(callbackfn, thisArg);
+    this[baseMap].forEach(callbackfn, thisArg);
   }
   get(key: K): V | undefined {
-    this.strategy.touch(key, this.baseMap);
-    return this.baseMap.get(key);
+    this[strategy].touch(key, this[baseMap]);
+    return this[baseMap].get(key);
   }
   has(key: K): boolean {
-    return this.baseMap.has(key);
+    return this[baseMap].has(key);
   }
   set(key: K, value: V): this {
-    this.strategy.touch(key, this.baseMap);
-    this.baseMap.set(key, value);
+    this[strategy].touch(key, this[baseMap]);
+    this[baseMap].set(key, value);
     return this;
   }
   get size(): number {
-    return this.baseMap.size;
+    return this[baseMap].size;
   }
   entries(): MapIterator<[K, V]> {
-    return this.baseMap.entries();
+    return this[baseMap].entries();
   }
   keys(): MapIterator<K> {
-    return this.baseMap.keys();
+    return this[baseMap].keys();
   }
   values(): MapIterator<V> {
-    return this.baseMap.values();
+    return this[baseMap].values();
   }
   [Symbol.iterator](): MapIterator<[K, V]> {
-    return this.baseMap[Symbol.iterator]();
+    return this[baseMap][Symbol.iterator]();
   }
   get [Symbol.toStringTag]() {
     return 'MapWithCacheStrategy';

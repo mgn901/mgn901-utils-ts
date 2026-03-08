@@ -1,4 +1,4 @@
-import type { NominalPrimitive } from './nominal-primitive.type';
+import type { NominalPrimitive } from './nominal-primitive.type.js';
 import { generateId, type Id } from './random-values.js';
 import { defineRouter } from './router-utils.js';
 

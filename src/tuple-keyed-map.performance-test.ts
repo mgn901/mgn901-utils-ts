@@ -1,5 +1,5 @@
 import { argv, memoryUsage } from 'node:process';
-import { TupleKeyedMap } from './tuple-keyed-map';
+import { TupleKeyedMap } from './tuple-keyed-map.js';
 
 const COUNT = 100_000;
 const MAX_TUPLE_LENGTH = 1;

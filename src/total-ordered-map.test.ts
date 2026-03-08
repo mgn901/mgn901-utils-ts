@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { LinkedTotalOrderedMap } from './total-ordered-map';
+import { LinkedTotalOrderedMap } from './total-ordered-map.js';
 
 const toArrayValues = <T>(m: LinkedTotalOrderedMap<T>) =>
   Array.from(m.values());

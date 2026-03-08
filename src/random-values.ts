@@ -1,4 +1,4 @@
-import type { NominalPrimitive } from './nominal-primitive.type';
+import type { NominalPrimitive } from './nominal-primitive.type.js';
 
 /**
  * エンティティ`E`のID文字列を表す公称プリミティブ型。

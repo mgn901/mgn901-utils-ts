@@ -1,0 +1,18 @@
+{
+  "lsp": {
+    "vtsls": {
+      "settings": {
+        "javascript": {
+          "preferences": {
+            "importModuleSpecifierEnding": "js"
+          }
+        },
+        "typescript": {
+          "preferences": {
+            "importModuleSpecifierEnding": "js"
+          }
+        }
+      }
+    }
+  }
+}

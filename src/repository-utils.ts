@@ -1,4 +1,4 @@
-import type { FieldsOf, OmitByValue, PickByValue } from './utils.type';
+import type { FieldsOf, OmitByValue, PickByValue } from './utils.type.js';
 
 const latestVersion = Symbol('repository.latestVersion');
 
