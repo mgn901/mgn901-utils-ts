@@ -5,7 +5,7 @@ const getEntryByKey = Symbol('getEntryByKey');
 const getIndexAndEntryByValue = Symbol('getEntryByValue');
 const deleteEntry = Symbol('deleteEntry');
 
-const defaultComparator = (a: unknown, b: unknown) => a === b;
+const defaultComparator = <T>(a: T, b: T) => a === b;
 
 /**
  * A Map-like ordered collection where keys are numeric indices (positions).
@@ -63,7 +63,7 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
   // pointers (`head`, `tail`, `prev`, `next`) are private.
   private [head]: ListEntry<T> | undefined;
   private [tail]: ListEntry<T> | undefined;
-  private [comparator]: (this: unknown, a: unknown, b: unknown) => boolean;
+  private [comparator]: (this: unknown, a: T, b: T) => boolean;
   size: number;
 
   /**
@@ -108,7 +108,7 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
       entry = entry.next;
       i++;
     }
-    return entry !== undefined && this[comparator](entry?.value, value)
+    return entry !== undefined && this[comparator](entry.value, value)
       ? [i, entry]
       : undefined;
   }
@@ -140,7 +140,7 @@ export class LinkedTotalOrderedMap<T> implements TotalOrderedMap<T> {
    */
   constructor(
     iterable?: readonly T[] | Iterable<T> | null,
-    compare?: (this: unknown, a: unknown, b: unknown) => boolean,
+    compare?: (this: unknown, a: T, b: T) => boolean,
   ) {
     this.size = 0;
     if (Array.isArray(iterable)) {

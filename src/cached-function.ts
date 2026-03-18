@@ -4,14 +4,14 @@ import {
 } from './total-ordered-map.js';
 import { TupleKeyedMap } from './tuple-keyed-map.js';
 
-export const cachedFunctionFrom = <A extends unknown[], R>(
+export const cachedFunctionFrom = <A extends readonly unknown[], R>(
   func: (this: unknown, ...args: A) => R,
   cacheStrategy: CacheStrategy<A, R>,
 ): ((this: unknown, ...args: A) => R) => {
-  const calculateKey = calculateKeyFactory<A>(cacheStrategy.limit);
+  const getCachedKey = createTupleCache<A>(cacheStrategy.limit);
   const cache = new WithCacheStrategy<A, R>(new Map(), cacheStrategy);
   return (...args: A) => {
-    const key = calculateKey(...args);
+    const key = getCachedKey(...args);
     const cacheExists = cache.get(key);
     if (cacheExists) return cacheExists;
     const result = func(...args);
@@ -32,10 +32,10 @@ export class LruCacheStrategy<K, V> implements CacheStrategy<K, V> {
   private cacheKeys: TotalOrderedMap<K>;
   constructor(
     limit: number,
-    compare?: (this: unknown, a: unknown, b: unknown) => boolean,
+    compareKey?: (this: unknown, a: K, b: K) => boolean,
   ) {
     this._limit = limit;
-    this.cacheKeys = new LinkedTotalOrderedMap(undefined, compare);
+    this.cacheKeys = new LinkedTotalOrderedMap(undefined, compareKey);
   }
   get limit(): number {
     return this._limit;
@@ -58,14 +58,14 @@ export class LruCacheStrategy<K, V> implements CacheStrategy<K, V> {
   }
 }
 
-export const compareTuple = (a: unknown, b: unknown): boolean => {
+export const compareTuple = <T>(a: readonly T[], b: readonly T[]): boolean => {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
     return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 };
 
-const calculateKeyFactory = <A extends unknown[]>(
+export const createTupleCache = <A extends readonly unknown[]>(
   limit: number,
 ): ((...args: A) => A) => {
   const keys = new WithCacheStrategy(
@@ -84,7 +84,7 @@ const calculateKeyFactory = <A extends unknown[]>(
 const strategy = Symbol('strategy');
 const baseMap = Symbol('baseMap');
 
-export class WithCacheStrategy<K, V> implements Map<K, V> {
+class WithCacheStrategy<K, V> implements Map<K, V> {
   private readonly [strategy]: CacheStrategy<K, V>;
   private readonly [baseMap]: Map<K, V>;
 
